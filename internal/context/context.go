@@ -3,8 +3,6 @@ package context
 import (
 	"log/slog"
 	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -152,7 +150,11 @@ func NewGameHelper() *CurrentGameHelper {
 func Get() *Status {
 	mu.Lock()
 	defer mu.Unlock()
-	return botContexts[getGoroutineID()]
+	s := botContexts[getGoroutineID()]
+	if s == nil {
+		panic("context.Get called from an unregistered goroutine — missing AttachRoutine call")
+	}
+	return s
 }
 
 func (s *Status) SetLastAction(actionName string) {
@@ -163,13 +165,21 @@ func (s *Status) SetLastStep(stepName string) {
 	s.Context.ContextDebug[s.Priority].LastStep = stepName
 }
 
+// getGoroutineID returns the numeric ID of the calling goroutine.
+// It parses the first line of the stack trace ("goroutine NNN [running]:\n").
+// A 30-byte buffer is enough for the prefix; we scan bytes directly to
+// avoid the string and strings.Fields allocations of the previous approach.
 func getGoroutineID() uint64 {
-	var buf [64]byte
+	var buf [30]byte
 	n := runtime.Stack(buf[:], false)
-	stackTrace := string(buf[:n])
-	fields := strings.Fields(stackTrace)
-	id, _ := strconv.ParseUint(fields[1], 10, 64)
-
+	// Skip the "goroutine " prefix (10 bytes).
+	var id uint64
+	for _, c := range buf[10:n] {
+		if c < '0' || c > '9' {
+			break
+		}
+		id = id*10 + uint64(c-'0')
+	}
 	return id
 }
 

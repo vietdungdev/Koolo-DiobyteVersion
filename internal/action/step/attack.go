@@ -22,8 +22,13 @@ const attackCycleDuration = 120 * time.Millisecond
 const repositionCooldown = 2 * time.Second // Constant for repositioning cooldown
 
 var (
-	statesMutex           sync.RWMutex
-	monsterStates         = make(map[data.UnitID]*attackState)
+	// statesMutex guards monsterStates. All operations require a write lock
+	// because checkMonsterDamage reads and writes the state in the same critical section.
+	statesMutex sync.Mutex
+	// monsterStates is scoped per supervisor name (outer key = ctx.Name) so that
+	// multiple concurrent bots cannot corrupt each other's attack state through
+	// coincidentally shared UnitIDs from their respective game sessions.
+	monsterStates         = make(map[string]map[data.UnitID]*attackState)
 	ErrMonsterUnreachable = errors.New("monster appears to be unreachable or unkillable")
 )
 
@@ -188,7 +193,7 @@ func attack(settings attackSettings) error {
 		}
 
 		// Check if we need to reposition if we aren't doing any damage (prevent attacking through doors etc.)
-		_, state := checkMonsterDamage(monster) // Get the state
+		_, state := checkMonsterDamage(monster, ctx.Name) // Get the state
 		needsRepositioning := !state.failedAttemptStartTime.IsZero() &&
 			time.Since(state.failedAttemptStartTime) > 3*time.Second
 
@@ -198,7 +203,9 @@ func attack(settings attackSettings) error {
 			if errors.Is(err, ErrMonsterUnreachable) {
 				ctx.Logger.Info(fmt.Sprintf("Giving up on monster [%d] (Area: %s) due to unreachability/unkillability.", monster.Name, ctx.Data.PlayerUnit.Area.Area().Name))
 				statesMutex.Lock()
-				delete(monsterStates, settings.target) // Clean up state for this monster
+				if botMap := monsterStates[ctx.Name]; botMap != nil {
+					delete(botMap, settings.target)
+				}
 				statesMutex.Unlock()
 				return nil // Return nil, allowing the higher-level action to find a new monster or finish.
 			}
@@ -242,13 +249,15 @@ func burstAttack(settings attackSettings) error {
 	}
 
 	// Initially we try to move to the enemy, later we will check for closer enemies to keep attacking
-	_, state := checkMonsterDamage(monster)                                                        // Get the state for the initial monster
+	_, state := checkMonsterDamage(monster, ctx.Name)                                              // Get the state for the initial monster
 	err := ensureEnemyIsInRange(monster, state, settings.maxDistance, settings.minDistance, false) // No initial repositioning check for burst
 	if err != nil {
 		if errors.Is(err, ErrMonsterUnreachable) {
 			ctx.Logger.Info(fmt.Sprintf("Giving up on initial monster [%d] (Area: %s) due to unreachability/unkillability during burst.", monster.Name, ctx.Data.PlayerUnit.Area.Area().Name))
 			statesMutex.Lock()
-			delete(monsterStates, monster.UnitID) // Clean up state for this monster
+			if botMap := monsterStates[ctx.Name]; botMap != nil {
+				delete(botMap, monster.UnitID)
+			}
 			statesMutex.Unlock()
 			return nil // Exit burst attack, caller will find next target.
 		}
@@ -278,7 +287,7 @@ func burstAttack(settings attackSettings) error {
 		}
 
 		// Check if we need to reposition if we aren't doing any damage
-		_, state = checkMonsterDamage(target) // Get the state for the current target
+		_, state = checkMonsterDamage(target, ctx.Name) // Get the state for the current target
 
 		needsRepositioning := !state.failedAttemptStartTime.IsZero() &&
 			time.Since(state.failedAttemptStartTime) > 3*time.Second
@@ -291,7 +300,9 @@ func burstAttack(settings attackSettings) error {
 				if errors.Is(err, ErrMonsterUnreachable) { // HANDLE NEW ERROR
 					ctx.Logger.Info(fmt.Sprintf("Giving up on monster [%d] (Area: %s) due to unreachability/unkillability during burst.", target.Name, ctx.Data.PlayerUnit.Area.Area().Name))
 					statesMutex.Lock()
-					delete(monsterStates, target.UnitID) // Clean up state for this monster
+					if botMap := monsterStates[ctx.Name]; botMap != nil {
+						delete(botMap, target.UnitID)
+					}
 					statesMutex.Unlock()
 					return nil // Exit burst attack, caller will find next target.
 				}
@@ -517,11 +528,22 @@ func ensureEnemyIsInRange(monster data.Monster, state *attackState, maxDistance,
 	return nil // No suitable position found along path, continue attacking
 }
 
-func checkMonsterDamage(monster data.Monster) (bool, *attackState) {
+// checkMonsterDamage tracks per-bot, per-monster health to detect when a bot is
+// failing to deal damage (e.g. attacking through a wall). botName scopes the
+// state map so concurrent bots with coincidentally identical UnitIDs do not
+// corrupt each other's tracking state.
+func checkMonsterDamage(monster data.Monster, botName string) (bool, *attackState) {
 	statesMutex.Lock()
 	defer statesMutex.Unlock()
 
-	state, exists := monsterStates[monster.UnitID]
+	// Ensure the per-bot map exists.
+	botMap := monsterStates[botName]
+	if botMap == nil {
+		botMap = make(map[data.UnitID]*attackState)
+		monsterStates[botName] = botMap
+	}
+
+	state, exists := botMap[monster.UnitID]
 	if !exists {
 		state = &attackState{
 			lastHealth:          monster.Stats[stat.Life],
@@ -529,7 +551,7 @@ func checkMonsterDamage(monster data.Monster) (bool, *attackState) {
 			position:            monster.Position,
 			repositionAttempts:  0, // Initialize counter to 0 for new states
 		}
-		monsterStates[monster.UnitID] = state
+		botMap[monster.UnitID] = state
 	}
 
 	didDamage := false
@@ -551,12 +573,12 @@ func checkMonsterDamage(monster data.Monster) (bool, *attackState) {
 		state.lastHealthCheckTime = time.Now()
 		state.position = monster.Position
 
-		// Clean up old entries periodically
-		if len(monsterStates) > 100 {
+		// Periodically purge stale entries from this bot's state map.
+		if len(botMap) > 100 {
 			now := time.Now()
-			for id, s := range monsterStates {
+			for id, s := range botMap {
 				if now.Sub(s.lastHealthCheckTime) > 5*time.Minute {
-					delete(monsterStates, id)
+					delete(botMap, id)
 				}
 			}
 		}

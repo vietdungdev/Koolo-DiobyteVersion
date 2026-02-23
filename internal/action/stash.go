@@ -90,14 +90,19 @@ func isStashingRequired(firstRun bool) bool {
 		}
 	}
 
-	// Check if all stash tabs are full of gold
-	// Personal stash: 2.5M cap, Shared stash: 7.5M combined cap
-	isStashFull := ctx.Data.Inventory.StashedGold[0] >= maxGoldPerStashTab &&
-		ctx.Data.Inventory.StashedGold[1] >= maxGoldPerSharedStash
+	// Check if all stash tabs are full of gold.
+	// Guard against a short StashedGold slice (fresh character, connection glitch).
+	var personalGold, sharedGold int
+	if len(ctx.Data.Inventory.StashedGold) > 0 {
+		personalGold = ctx.Data.Inventory.StashedGold[0]
+	}
+	if len(ctx.Data.Inventory.StashedGold) > 1 {
+		sharedGold = ctx.Data.Inventory.StashedGold[1]
+	}
+	isStashFull := personalGold >= maxGoldPerStashTab && sharedGold >= maxGoldPerSharedStash
 
-	// Calculate total gold (inventory + stashed) for the new aggressive stashing rule
-	// StashedGold[0] = personal, StashedGold[1] = combined shared gold
-	totalGold := ctx.Data.Inventory.Gold + ctx.Data.Inventory.StashedGold[0] + ctx.Data.Inventory.StashedGold[1]
+	// Calculate total gold (inventory + stashed) for the aggressive stashing rule.
+	totalGold := ctx.Data.Inventory.Gold + personalGold + sharedGold
 
 	// 1. AGGRESSIVE STASHING for leveling characters with LOW TOTAL GOLD
 	if isLevelingChar && totalGold < maxTotalGoldForAggressiveLevelingStash && ctx.Data.Inventory.Gold >= minInventoryGoldForStashAggressiveLeveling && !isStashFull {
@@ -276,15 +281,12 @@ func shouldStashIt(i data.Item, firstRun bool) (bool, bool, string, string) {
 		return false, false, "", ""
 	}
 
-	// These items should NEVER be stashed, regardless of quest status, pickit rules, or first run.
-	fmt.Printf("DEBUG: Evaluating item '%s' for *absolute* exclusion from stash.\n", i.Name)
-	if i.Name == "horadricstaff" { // This is the simplest way given your logs
-		fmt.Printf("DEBUG: ABSOLUTELY PREVENTING stash for '%s' (Horadric Staff exclusion).\n", i.Name)
-		return false, false, "", "" // Explicitly do NOT stash the Horadric Staff
+	// These items must never be stashed regardless of quest status, pickit rules, or first run.
+	if i.Name == "horadricstaff" {
+		return false, false, "", ""
 	}
 
 	if i.Name == "TomeOfTownPortal" || i.Name == "TomeOfIdentify" || i.Name == "Key" || i.Name == "WirtsLeg" {
-		fmt.Printf("DEBUG: ABSOLUTELY PREVENTING stash for '%s' (Quest/Special item exclusion).\n", i.Name)
 		return false, false, "", ""
 	}
 
@@ -293,7 +295,6 @@ func shouldStashIt(i data.Item, firstRun bool) (bool, bool, string, string) {
 	}
 
 	if firstRun {
-		fmt.Printf("DEBUG: Allowing stash for '%s' (first run).\n", i.Name)
 		return true, false, "FirstRun", ""
 	}
 
@@ -326,30 +327,22 @@ func shouldStashIt(i data.Item, firstRun bool) (bool, bool, string, string) {
 
 	if res == nip.RuleResultFullMatch {
 		if doesExceedQuantity(rule) {
-			// If it matches a rule but exceeds quantity, we want to drop it, not stash.
-			fmt.Printf("DEBUG: Dropping '%s' because MaxQuantity is exceeded.\n", i.Name)
+			// Rule matched but quantity cap exceeded — drop the item.
 			return false, true, rule.RawLine, rule.Filename + ":" + strconv.Itoa(rule.LineNumber)
-		} else {
-			// If it matches a rule and quantity is fine, stash it.
-			fmt.Printf("DEBUG: Allowing stash for '%s' (pickit rule match: %s).\n", i.Name, rule.RawLine)
-			return true, false, rule.RawLine, rule.Filename + ":" + strconv.Itoa(rule.LineNumber)
 		}
+		// Rule matched and quantity is within limits — stash.
+		return true, false, rule.RawLine, rule.Filename + ":" + strconv.Itoa(rule.LineNumber)
 	}
 
 	if i.IsRuneword {
 		return true, false, "Runeword", ""
 	}
 
-	fmt.Printf("DEBUG: Disallowing stash for '%s' (no rule match and not explicitly kept, and not exceeding quantity).\n", i.Name)
-	return false, false, "", "" // Default if no other rule matches
+	return false, false, "", "" // Default: no rule match, no explicit keep
 }
 
-// shouldKeepRecipeItem decides whether the bot should stash a low-quality item that is part of an enabled cube recipe.
-// It now supports keeping multiple jewels for crafting via maxJewelsKept.
-// shouldKeepRecipeItem decides whether the bot should stash a low-quality item that is part of an enabled cube recipe.
-// It now supports keeping multiple jewels for crafting via JewelsToKeep.
-// shouldKeepRecipeItem decides whether the bot should stash a low-quality item that is part of an enabled cube recipe.
-// It now supports keeping multiple jewels (of any quality) for crafting via JewelsToKeep.
+// shouldKeepRecipeItem decides whether the bot should stash a low-quality item that is part of an enabled
+// cube recipe. It supports keeping multiple jewels (of any quality) up to the JewelsToKeep limit.
 func shouldKeepRecipeItem(i data.Item) bool {
 	ctx := context.Get()
 	ctx.SetLastStep("shouldKeepRecipeItem")

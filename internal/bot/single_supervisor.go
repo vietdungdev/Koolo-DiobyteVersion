@@ -820,9 +820,6 @@ func (s *SinglePlayerSupervisor) HandleMenuFlow() error {
 			}
 			return errors.New("[Menu Flow]: Failed to dismiss popup (still present)")
 		}
-	} else {
-		// If no dismissable modal is present, reset the counter for failed attempts if it's related to modals
-		s.bot.ctx.CurrentGame.FailedToCreateGameAttempts = 0
 	}
 
 	if s.bot.ctx.CharacterCfg.Companion.Enabled && !s.bot.ctx.CharacterCfg.Companion.Leader {

@@ -9,7 +9,7 @@ import (
 
 // session fatigue state — reset at the start of each play session.
 var (
-	sessionMu    sync.Mutex
+	sessionMu    sync.RWMutex
 	sessionStart time.Time
 )
 
@@ -27,9 +27,9 @@ func SetSessionStart() {
 // the first 3 hours of a session and then plateaus. Returns 1.0 when no
 // session has been started (e.g. outside a play sequence).
 func sessionFatigue() float64 {
-	sessionMu.Lock()
+	sessionMu.RLock()
 	start := sessionStart
-	sessionMu.Unlock()
+	sessionMu.RUnlock()
 	if start.IsZero() {
 		return 1.0
 	}

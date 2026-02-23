@@ -171,12 +171,13 @@ func (mng *SupervisorManager) ReloadConfig() error {
 			continue
 		}
 
-		// Preserve runtime data
-		//oldRuntimeData := ctx.CharacterCfg.Runtime
+		// Preserve runtime data (compiled NIP rules, tier rules, etc.) so they
+		// survive a mid-game hot-reload and pickit continues to work immediately.
+		oldRuntimeData := ctx.CharacterCfg.Runtime
 
 		// Update the config
 		*ctx.CharacterCfg = *newCfg
-		//ctx.CharacterCfg.Runtime = oldRuntimeData
+		ctx.CharacterCfg.Runtime = oldRuntimeData
 	}
 
 	return nil

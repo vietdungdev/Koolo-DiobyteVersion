@@ -22,7 +22,6 @@ const (
 )
 
 var (
-	maxInteractions      = 24 // 25 attempts since we start at 0
 	ErrItemTooFar        = errors.New("item is too far away")
 	ErrNoLOSToItem       = errors.New("no line of sight to item")
 	ErrMonsterAroundItem = errors.New("monsters detected around item")
@@ -58,6 +57,8 @@ func PickupItemMouse(it data.Item, itemPickupAttempt int) error {
 		ctx.RefreshGameData()
 	}
 
+	// maxInteractions is local to this call: high-attempt modes get extra tries.
+	maxInteractions := 24
 	// Calculate base screen position for item
 	baseX := it.Position.X - 1
 	baseY := it.Position.Y - 1
@@ -71,8 +72,6 @@ func PickupItemMouse(it data.Item, itemPickupAttempt int) error {
 		maxInteractions = 44
 		baseX = baseX - 1
 		baseY = baseY - 1
-	default:
-		maxInteractions = 24
 	}
 	baseScreenX, baseScreenY := ctx.PathFinder.GameCoordsToScreenCords(baseX, baseY)
 

@@ -37,21 +37,30 @@ func (b *Bot) NeedsTPsToContinue() bool {
 }
 
 func (b *Bot) shouldReturnToTown(lvl int, needHealingPotionsRefill, needManaPotionsRefill, townChicken bool) bool {
-	if (b.ctx.Data.PlayerUnit.TotalPlayerGold() > 500 && lvl <= 5) ||
-		(b.ctx.Data.PlayerUnit.TotalPlayerGold() > 1000 && lvl < 20) ||
-		(b.ctx.Data.PlayerUnit.TotalPlayerGold() > 5000 && lvl >= 20) {
-		if (b.ctx.CharacterCfg.BackToTown.NoHpPotions && needHealingPotionsRefill ||
-			b.ctx.CharacterCfg.BackToTown.EquipmentBroken && action.IsEquipmentBroken() ||
-			b.ctx.CharacterCfg.BackToTown.NoMpPotions && needManaPotionsRefill ||
-			townChicken ||
-			b.ctx.CharacterCfg.BackToTown.MercDied &&
-				b.ctx.Data.MercHPPercent() <= 0 &&
-				b.ctx.CharacterCfg.Character.UseMerc &&
-				b.ctx.Data.PlayerUnit.TotalPlayerGold() > 100000) &&
-			!b.ctx.Data.PlayerUnit.Area.IsTown() &&
-			b.ctx.Data.PlayerUnit.Area != area.UberTristram {
-			return true
-		}
+	// Never return to town when already in town or in Uber Tristram.
+	if b.ctx.Data.PlayerUnit.Area.IsTown() || b.ctx.Data.PlayerUnit.Area == area.UberTristram {
+		return false
+	}
+
+	// Emergency conditions — always trigger regardless of gold on hand.
+	if townChicken {
+		return true
+	}
+	if b.ctx.CharacterCfg.BackToTown.NoHpPotions && needHealingPotionsRefill {
+		return true
+	}
+	if b.ctx.CharacterCfg.BackToTown.NoMpPotions && needManaPotionsRefill {
+		return true
+	}
+	if b.ctx.CharacterCfg.BackToTown.EquipmentBroken && action.IsEquipmentBroken() {
+		return true
+	}
+	// Merc revive only makes sense if we can afford the fee.
+	if b.ctx.CharacterCfg.BackToTown.MercDied &&
+		b.ctx.Data.MercHPPercent() <= 0 &&
+		b.ctx.CharacterCfg.Character.UseMerc &&
+		b.ctx.Data.PlayerUnit.TotalPlayerGold() > 100000 {
+		return true
 	}
 
 	return false
