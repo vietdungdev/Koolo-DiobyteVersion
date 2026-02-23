@@ -66,9 +66,12 @@ func (a Leveling) act4() error {
 		harrogathPortal, found := a.ctx.Data.Objects.FindOne(object.LastLastPortal)
 		if !found { // portal was already opened before so we must talk to Tyrael to get to A5
 			a.ctx.HID.KeySequence(win.VK_HOME, win.VK_DOWN, win.VK_RETURN)
-			// After attempting to open it with key sequence, you should re-check if it's found
-			// If still not found, then it's an error.
-
+			utils.Sleep(1000)
+			a.ctx.RefreshGameData()
+			harrogathPortal, found = a.ctx.Data.Objects.FindOne(object.LastLastPortal)
+			if !found {
+				return errors.New("portal to Harrogath not found after key sequence")
+			}
 		}
 
 		err = action.InteractObject(harrogathPortal, func() bool {
@@ -151,9 +154,12 @@ func (a Leveling) act4() error {
 		harrogathPortal, found := a.ctx.Data.Objects.FindOne(object.LastLastPortal)
 		if !found { // portal was already opened before so we must talk to Tyrael to get to A5
 			a.ctx.HID.KeySequence(win.VK_HOME, win.VK_DOWN, win.VK_RETURN)
-			// After attempting to open it with key sequence, you should re-check if it's found
-			// If still not found, then it's an error.
-
+			utils.Sleep(1000)
+			a.ctx.RefreshGameData()
+			harrogathPortal, found = a.ctx.Data.Objects.FindOne(object.LastLastPortal)
+			if !found {
+				return errors.New("portal to Harrogath not found after key sequence")
+			}
 		}
 
 		err = action.InteractObject(harrogathPortal, func() bool {

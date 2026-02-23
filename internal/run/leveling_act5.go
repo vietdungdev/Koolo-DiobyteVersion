@@ -109,8 +109,9 @@ func (a Leveling) act5() error {
 		return nil
 	}
 
-	wp, _ := a.ctx.Data.Objects.FindOne(object.ExpansionWaypoint)
-	action.MoveToCoords(wp.Position)
+	if wp, wpFound := a.ctx.Data.Objects.FindOne(object.ExpansionWaypoint); wpFound {
+		action.MoveToCoords(wp.Position)
+	}
 
 	anyaQuest := a.ctx.Data.Quests[quest.Act5PrisonOfIce]
 	_, anyaInTown := a.ctx.Data.Monsters.FindOne(npc.Drehya, data.MonsterTypeNone)
