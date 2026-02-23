@@ -2,6 +2,7 @@ package action
 
 import (
 	"log/slog"
+	"math/rand"
 	"time"
 
 	"github.com/hectorgimenez/d2go/pkg/data"
@@ -85,7 +86,9 @@ func Buff() {
 			utils.Sleep(100)
 			ctx.HID.PressKeyBinding(kb)
 			utils.Sleep(180)
-			ctx.HID.Click(game.RightButton, 640, 340)
+			// Jitter the cast-click position ±15 px so buff clicks are not
+			// always pixel-perfect at the same coordinate every session.
+			ctx.HID.Click(game.RightButton, 640+rand.Intn(31)-15, 340+rand.Intn(31)-15)
 			utils.Sleep(100)
 		}
 	}
@@ -122,7 +125,7 @@ func Buff() {
 			utils.Sleep(100)
 			ctx.HID.PressKeyBinding(kb)
 			utils.Sleep(180)
-			ctx.HID.Click(game.RightButton, 640, 340)
+			ctx.HID.Click(game.RightButton, 640+rand.Intn(31)-15, 340+rand.Intn(31)-15)
 			utils.Sleep(100)
 		}
 
@@ -144,7 +147,10 @@ func Buff() {
 	}
 
 	if buffsSuccessful {
-		ctx.LastBuffAt = time.Now()
+		// Advance LastBuffAt slightly into the future (0–8 s) so the effective
+		// 30 s cooldown fires between 30–38 s, matching the natural variance in
+		// a human's buff re-application timing rather than a sharp 30 s step.
+		ctx.LastBuffAt = time.Now().Add(time.Duration(rand.Intn(8001)) * time.Millisecond)
 	}
 }
 
@@ -209,12 +215,12 @@ func buffCTA() {
 
 		ctx.HID.PressKeyBinding(ctx.Data.KeyBindings.MustKBForSkill(skill.BattleCommand))
 		utils.Sleep(180)
-		ctx.HID.Click(game.RightButton, 300, 300)
+		ctx.HID.Click(game.RightButton, 300+rand.Intn(31)-15, 300+rand.Intn(31)-15)
 		utils.Sleep(100)
 
 		ctx.HID.PressKeyBinding(ctx.Data.KeyBindings.MustKBForSkill(skill.BattleOrders))
 		utils.Sleep(180)
-		ctx.HID.Click(game.RightButton, 300, 300)
+		ctx.HID.Click(game.RightButton, 300+rand.Intn(31)-15, 300+rand.Intn(31)-15)
 		utils.Sleep(100)
 
 		utils.PingSleep(utils.Light, 400)

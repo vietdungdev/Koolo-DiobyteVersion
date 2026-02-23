@@ -3,6 +3,7 @@ package step
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -209,8 +210,17 @@ func attack(settings attackSettings) error {
 			ctx.HID.PressKeyBinding(ctx.Data.KeyBindings.MustKBForSkill(settings.aura))
 		}
 
-		// Attack timing check
-		if time.Since(lastRunAt) <= ctx.Data.PlayerCastDuration()-attackCycleDuration {
+		// Attack timing check — apply ±30 ms jitter around the nominal cast
+		// interval so the inter-attack gap distribution is not a perfectly
+		// sharp step function at exactly castDuration-120 ms every cycle.
+		// Clamped to >= 0 so high-FCR builds (where castDuration-120 ms is
+		// small) cannot produce a negative threshold that bypasses throttling.
+		attackInterval := ctx.Data.PlayerCastDuration() - attackCycleDuration +
+			time.Duration(rand.Intn(61)-30)*time.Millisecond
+		if attackInterval < 0 {
+			attackInterval = 0
+		}
+		if time.Since(lastRunAt) <= attackInterval {
 			continue
 		}
 
@@ -359,8 +369,9 @@ func performAttack(ctx *context.Status, settings attackSettings, targetID data.U
 				ctx.Logger.Warn("Failed to cast entity skill via packet (left), falling back to mouse", "error", err)
 				performMouseAttack(ctx, settings, x, y)
 			} else {
-				// Respect cast duration to avoid spamming server
-				time.Sleep(ctx.Data.PlayerCastDuration())
+				// Sleep for one cast frame with ±30 ms jitter so packet-cast
+				// intervals are not metronomically exact (breaks timing fingerprint).
+				time.Sleep(ctx.Data.PlayerCastDuration() + time.Duration(rand.Intn(61)-30)*time.Millisecond)
 			}
 		} else {
 			selectedButton, selected := selectSecondarySkillButton(ctx, settings.skill)
@@ -373,8 +384,7 @@ func performAttack(ctx *context.Status, settings attackSettings, targetID data.U
 					ctx.Logger.Warn("Failed to cast entity skill via packet (left), falling back to mouse", "error", err)
 					performMouseAttack(ctx, settings, x, y)
 				} else {
-					// Respect cast duration to avoid spamming server
-					time.Sleep(ctx.Data.PlayerCastDuration())
+					time.Sleep(ctx.Data.PlayerCastDuration() + time.Duration(rand.Intn(61)-30)*time.Millisecond)
 				}
 			} else {
 				castPacket := packet.NewCastSkillEntityRight(targetID)
@@ -382,8 +392,7 @@ func performAttack(ctx *context.Status, settings attackSettings, targetID data.U
 					ctx.Logger.Warn("Failed to cast entity skill via packet (right), falling back to mouse", "error", err)
 					performMouseAttack(ctx, settings, x, y)
 				} else {
-					// Respect cast duration to avoid spamming server
-					time.Sleep(ctx.Data.PlayerCastDuration())
+					time.Sleep(ctx.Data.PlayerCastDuration() + time.Duration(rand.Intn(61)-30)*time.Millisecond)
 				}
 			}
 		}

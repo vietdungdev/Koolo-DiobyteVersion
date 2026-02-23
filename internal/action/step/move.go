@@ -137,15 +137,15 @@ func MoveTo(dest data.Position, options ...MoveOption) error {
 	// Adjust polling frequency based on network latency
 	var walkDuration time.Duration
 	if !ctx.Data.AreaData.Area.IsTown() {
-		// In dungeons: faster refresh for combat
-		baseMin, baseMax := 300, 350
-		pingAdjustment := int(float64(ctx.Data.Game.Ping) * 0.5) // Add half ping to base
-		walkDuration = utils.RandomDurationMs(baseMin+pingAdjustment, baseMax+pingAdjustment)
-	} else {
-		// In town: moderately fast refresh to avoid getting stuck on obstacles
-		baseMin, baseMax := 350, 450
+		// Gamma(shape=3, mean≈325ms+ping) gives a right-skewed distribution
+		// that is much wider than the old 50 ms uniform window, better matching
+		// empirical human walk-click inter-event timing in dungeons.
 		pingAdjustment := int(float64(ctx.Data.Game.Ping) * 0.5)
-		walkDuration = utils.RandomDurationMs(baseMin+pingAdjustment, baseMax+pingAdjustment)
+		walkDuration = utils.RandGammaDurationMs(325.0+float64(pingAdjustment), 3.0)
+	} else {
+		// In town: slightly slower mean, same Gamma shape for consistency.
+		pingAdjustment := int(float64(ctx.Data.Game.Ping) * 0.5)
+		walkDuration = utils.RandGammaDurationMs(400.0+float64(pingAdjustment), 3.0)
 	}
 
 	lastRun := time.Time{}

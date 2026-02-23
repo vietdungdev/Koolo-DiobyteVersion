@@ -628,7 +628,19 @@ func (s *SinglePlayerSupervisor) Start() error {
 		// Occasionally wander the cursor to simulate human fidgeting on the
 		// lobby / character-select screen before creating the next game.
 		s.idleCursorWander()
-		utils.Sleep(utils.RandRng(idleMinMs, idleMaxMs))
+		// Sample a log-normal idle gap so the between-game pause has a
+		// realistic right-skewed distribution rather than a flat uniform
+		// histogram that is easy to distinguish from human behaviour.
+		midMs := float64(idleMinMs+idleMaxMs) / 2.0
+		stdMs := float64(idleMaxMs-idleMinMs) / 4.0
+		idleMs := utils.RandLogNormal(midMs, stdMs)
+		if idleMs < idleMinMs {
+			idleMs = idleMinMs
+		}
+		if idleMs > idleMaxMs*2 { // allow moderate right-tail but cap at 2× max
+			idleMs = idleMaxMs * 2
+		}
+		utils.Sleep(idleMs)
 	}
 }
 
@@ -638,7 +650,15 @@ func (s *SinglePlayerSupervisor) Start() error {
 // a new run, breaking the otherwise nearly-static cursor pattern visible in
 // input-event logs between game sessions.
 func (s *SinglePlayerSupervisor) idleCursorWander() {
-	n := rand.Intn(3) // 0, 1, or 2 moves
+	// Use a geometric-like count so the distribution is skewed toward 0 moves:
+	// P(0)≈0.55, P(1)≈0.25, P(2)≈0.11, P(3)≈0.05, P(4)≈0.04.
+	// A flat rand.Intn(3) produces a uniform count over {0,1,2} which is
+	// statistically distinguishable from natural human cursor-fidget patterns.
+	// Each trial: continue if rand > 0.55 (prob=0.45), so P(stop at n) = 0.55 × 0.45^n.
+	n := 0
+	for rand.Float64() > 0.55 && n < 4 {
+		n++
+	}
 	for i := 0; i < n; i++ {
 		x := utils.RandRng(100, 700)
 		y := utils.RandRng(50, 500)

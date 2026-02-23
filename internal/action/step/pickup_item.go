@@ -3,6 +3,7 @@ package step
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/hectorgimenez/d2go/pkg/data"
@@ -133,8 +134,11 @@ func PickupItemMouse(it data.Item, itemPickupAttempt int) error {
 		}
 
 		offsetX, offsetY := utils.ItemSpiral(spiralAttempt)
-		cursorX := baseScreenX + offsetX
-		cursorY := baseScreenY + offsetY
+		// Apply a small ±2 px noise per attempt so the cursor trajectory is not
+		// identical across sessions and cannot be matched to a deterministic
+		// spiral template in event-log analysis.
+		cursorX := baseScreenX + offsetX + rand.Intn(5) - 2
+		cursorY := baseScreenY + offsetY + rand.Intn(5) - 2
 
 		// Move cursor directly to target position
 		ctx.HID.MovePointer(cursorX, cursorY)

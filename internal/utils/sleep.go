@@ -83,3 +83,32 @@ func Sleep(milliseconds int) {
 	sleepMs := int(float64(milliseconds) * multiplier * sessionFatigue())
 	time.Sleep(time.Duration(sleepMs) * time.Millisecond)
 }
+
+// RandLogNormal returns a duration in milliseconds sampled from a log-normal
+// distribution parameterised by the given mean and standard deviation (both in
+// ms). Log-normal is right-skewed, matching empirical human idle-time data
+// (e.g. between-game gaps) far better than a flat uniform range.
+func RandLogNormal(meanMs, stdMs float64) int {
+	variance := stdMs * stdMs
+	mu := math.Log(meanMs * meanMs / math.Sqrt(variance+meanMs*meanMs))
+	sigma := math.Sqrt(math.Log(1.0 + variance/(meanMs*meanMs)))
+	sample := math.Exp(mu + rand.NormFloat64()*sigma)
+	if sample < 1 {
+		sample = 1
+	}
+	return int(sample)
+}
+
+// RandGammaDurationMs returns a time.Duration sampled from a
+// Gamma(shape, mean/shape) distribution with the requested mean in milliseconds.
+// Higher shape → narrower spread; shape=3 gives a moderate right-skewed
+// distribution that matches empirical human walk-click intervals better than
+// the narrow uniform windows previously used.
+func RandGammaDurationMs(meanMs float64, shape float64) time.Duration {
+	scale := meanMs / shape
+	sample := sampleGamma(shape, scale)
+	if sample < 1 {
+		sample = 1
+	}
+	return time.Duration(sample) * time.Millisecond
+}
