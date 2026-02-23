@@ -134,7 +134,11 @@ func stashGold() {
 
 	// Try personal stash first (tab 1, max 2.5M)
 	ctx.RefreshGameData()
-	if ctx.Data.Inventory.Gold > 0 && ctx.Data.Inventory.StashedGold[0] < maxGoldPerStashTab {
+	var stabledPersonalGold int
+	if len(ctx.Data.Inventory.StashedGold) > 0 {
+		stabledPersonalGold = ctx.Data.Inventory.StashedGold[0]
+	}
+	if ctx.Data.Inventory.Gold > 0 && stabledPersonalGold < maxGoldPerStashTab {
 		SwitchStashTab(1)
 		clickStashGoldBtn()
 		utils.PingSleep(utils.Critical, 1000)
@@ -147,7 +151,11 @@ func stashGold() {
 
 	// Try shared stash (tab 2, combined max 7.5M)
 	// Gold is shared across all pages, so depositing on any page works
-	if ctx.Data.Inventory.Gold > 0 && ctx.Data.Inventory.StashedGold[1] < maxGoldPerSharedStash {
+	var stabledSharedGold int
+	if len(ctx.Data.Inventory.StashedGold) > 1 {
+		stabledSharedGold = ctx.Data.Inventory.StashedGold[1]
+	}
+	if ctx.Data.Inventory.Gold > 0 && stabledSharedGold < maxGoldPerSharedStash {
 		SwitchStashTab(2)
 		clickStashGoldBtn()
 		utils.PingSleep(utils.Critical, 1000)

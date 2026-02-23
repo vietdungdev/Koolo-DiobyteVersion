@@ -798,6 +798,7 @@ func findClosestShrine(maxScanDistance float64) *data.Object {
 	}
 
 	var currentPriorityIndex int = -1
+	var closestPrioritizedShrine *data.Object
 
 	for i, p := range prioritizedShrines {
 		if ctx.Data.PlayerUnit.States.HasState(p.state) {
@@ -820,14 +821,13 @@ func findClosestShrine(maxScanDistance float64) *data.Object {
 				distance := float64(ctx.PathFinder.DistanceFromMe(o.Position))
 				if distance < minDistance {
 					minDistance = distance
-					closestShrine := &o
-					return closestShrine
+					closestPrioritizedShrine = &o
 				}
 			}
 		}
 	}
 
-	return nil
+	return closestPrioritizedShrine
 }
 
 func getArcaneNextTeleportPadPosition(blacklistedPads []data.Object) (data.Object, error) {

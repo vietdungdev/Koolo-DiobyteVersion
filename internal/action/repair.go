@@ -10,7 +10,6 @@ import (
 	"github.com/hectorgimenez/d2go/pkg/data/stat"
 	"github.com/hectorgimenez/koolo/internal/action/step"
 	"github.com/hectorgimenez/koolo/internal/context"
-	botCtx "github.com/hectorgimenez/koolo/internal/context"
 	"github.com/hectorgimenez/koolo/internal/game"
 	"github.com/hectorgimenez/koolo/internal/town"
 	"github.com/hectorgimenez/koolo/internal/ui"
@@ -313,7 +312,7 @@ func IsEquipmentBroken() bool {
 }
 
 func FindHratliEverywhere() error {
-	ctx := botCtx.Get()
+	ctx := context.Get()
 	ctx.SetLastStep("FindHratliEverywhere")
 
 	finalPos := data.Position{X: 5224, Y: 5045}
