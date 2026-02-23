@@ -658,7 +658,7 @@ func (a Quests) killIzualQuest() error {
 	err = action.MoveTo(func() (data.Position, bool) {
 		areaData := a.ctx.Data.Areas[area.PlainsOfDespair]
 		izualNPC, found := areaData.NPCs.FindOne(npc.Izual)
-		if !found {
+		if !found || len(izualNPC.Positions) == 0 {
 			return data.Position{}, false
 		}
 
@@ -756,7 +756,10 @@ func (a Quests) rescueAnyaQuest() error {
 
 	err = action.MoveTo(func() (data.Position, bool) {
 		anya, found := a.ctx.Data.NPCs.FindOne(793)
-		return anya.Positions[0], found
+		if !found || len(anya.Positions) == 0 {
+			return data.Position{}, false
+		}
+		return anya.Positions[0], true
 	})
 	if err != nil {
 		return err

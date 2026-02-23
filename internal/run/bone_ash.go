@@ -50,7 +50,7 @@ func (b BoneAsh) Run(parameters *RunParameters) error {
 
 func (b BoneAsh) killBoneash() error {
 	monsterPosition := data.Position{}
-	if npcData, found := b.ctx.Data.NPCs.FindOneBySuperUniqueID(superunique.Boneash); found {
+	if npcData, found := b.ctx.Data.NPCs.FindOneBySuperUniqueID(superunique.Boneash); found && len(npcData.Positions) > 0 {
 		monsterPosition = npcData.Positions[0]
 	}
 

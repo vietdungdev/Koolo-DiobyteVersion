@@ -44,9 +44,11 @@ func (a A1) TPWaitingArea(d game.Data) data.Position {
 		}
 	}
 
-	cain, _ := d.NPCs.FindOne(npc.Kashya)
-
-	return cain.Positions[0]
+	cain, found := d.NPCs.FindOne(npc.Kashya)
+	if found && len(cain.Positions) > 0 {
+		return cain.Positions[0]
+	}
+	return data.Position{}
 }
 
 func (a A1) TownArea() area.ID {

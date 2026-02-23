@@ -108,7 +108,7 @@ func (c Countess) Run(parameters *RunParameters) error {
 	err = action.MoveTo(func() (data.Position, bool) {
 		areaData := c.ctx.Data.Areas[area.TowerCellarLevel5]
 		countessNPC, found := areaData.NPCs.FindOne(740)
-		if !found {
+		if !found || len(countessNPC.Positions) == 0 {
 			return data.Position{}, false
 		}
 

@@ -211,7 +211,7 @@ func (b *Bot) Run(ctx context.Context, firstRun bool, runs []run.Run) error {
 				}
 
 				// Check for max game length (this is a separate check from idle)
-				if time.Since(gameStartedAt).Seconds() > float64(b.ctx.CharacterCfg.MaxGameLength) {
+				if b.ctx.CharacterCfg.MaxGameLength > 0 && time.Since(gameStartedAt).Seconds() > float64(b.ctx.CharacterCfg.MaxGameLength) {
 					b.ctx.Logger.Info("Max game length reached, try to exit game", slog.Float64("duration", time.Since(gameStartedAt).Seconds()))
 					b.Stop() // This will set PriorityStop and detach the context
 					return fmt.Errorf(

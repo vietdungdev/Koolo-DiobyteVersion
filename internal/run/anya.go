@@ -78,7 +78,10 @@ func (a Anya) Run(parameters *RunParameters) error {
 
 	err = action.MoveTo(func() (data.Position, bool) {
 		anya, found := a.ctx.Data.NPCs.FindOne(793)
-		return anya.Positions[0], found
+		if !found || len(anya.Positions) == 0 {
+			return data.Position{}, false
+		}
+		return anya.Positions[0], true
 	})
 	if err != nil {
 		return err

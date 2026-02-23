@@ -70,7 +70,7 @@ func (i Izual) Run(parameters *RunParameters) error {
 	err = action.MoveTo(func() (data.Position, bool) {
 		areaData := i.ctx.Data.Areas[area.PlainsOfDespair]
 		izualNPC, found := areaData.NPCs.FindOne(npc.Izual)
-		if !found {
+		if !found || len(izualNPC.Positions) == 0 {
 			return data.Position{}, false
 		}
 

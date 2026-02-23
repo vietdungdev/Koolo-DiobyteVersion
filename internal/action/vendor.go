@@ -9,7 +9,6 @@ import (
 	"github.com/hectorgimenez/d2go/pkg/data/stat"
 	"github.com/hectorgimenez/koolo/internal/action/step"
 	"github.com/hectorgimenez/koolo/internal/context"
-	botCtx "github.com/hectorgimenez/koolo/internal/context"
 	"github.com/hectorgimenez/koolo/internal/game"
 	"github.com/hectorgimenez/koolo/internal/town"
 	"github.com/hectorgimenez/koolo/internal/ui"
@@ -19,14 +18,14 @@ import (
 
 // VendorRefillOpts configures vendor refill behavior
 type VendorRefillOpts struct {
-	ForceRefill    bool     // Force refill even if not needed
-	SellJunk       bool     // Sell junk items to vendor
-	BuyConsumables bool     // Buy potions, scrolls, keys (default behavior when not specified)
-	LockConfig     [][]int  // Inventory slots to protect from selling
+	ForceRefill    bool    // Force refill even if not needed
+	SellJunk       bool    // Sell junk items to vendor
+	BuyConsumables bool    // Buy potions, scrolls, keys (default behavior when not specified)
+	LockConfig     [][]int // Inventory slots to protect from selling
 }
 
 func VendorRefill(opts VendorRefillOpts) (err error) {
-	ctx := botCtx.Get()
+	ctx := context.Get()
 	ctx.SetLastAction("VendorRefill")
 
 	if !opts.ForceRefill {
@@ -106,7 +105,7 @@ func VendorRefill(opts VendorRefillOpts) (err error) {
 }
 
 func BuyAtVendor(vendor npc.ID, items ...VendorItemRequest) error {
-	ctx := botCtx.Get()
+	ctx := context.Get()
 	ctx.SetLastAction("BuyAtVendor")
 
 	err := InteractNPC(vendor)
@@ -114,9 +113,9 @@ func BuyAtVendor(vendor npc.ID, items ...VendorItemRequest) error {
 		return err
 	}
 
-	// Jamella trade button is the first one
+	// Jamella trade button is the first one (no VK_DOWN needed for Jamella)
 	if vendor == npc.Jamella {
-		ctx.HID.KeySequence(win.VK_HOME, win.VK_DOWN, win.VK_RETURN)
+		ctx.HID.KeySequence(win.VK_HOME, win.VK_RETURN)
 	} else {
 		ctx.HID.KeySequence(win.VK_HOME, win.VK_DOWN, win.VK_RETURN)
 	}
@@ -141,7 +140,7 @@ type VendorItemRequest struct {
 }
 
 func shouldVisitVendor() bool {
-	ctx := botCtx.Get()
+	ctx := context.Get()
 	ctx.SetLastStep("shouldVisitVendor")
 
 	if len(town.ItemsToBeSold()) > 0 {

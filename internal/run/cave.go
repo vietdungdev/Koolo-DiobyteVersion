@@ -54,7 +54,7 @@ func (c Cave) Run(parameters *RunParameters) error {
 
 func (c Cave) killColdcrow() error {
 	monsterPosition := data.Position{}
-	if npcData, found := c.ctx.Data.NPCs.FindOneBySuperUniqueID(superunique.Coldcrow); found {
+	if npcData, found := c.ctx.Data.NPCs.FindOneBySuperUniqueID(superunique.Coldcrow); found && len(npcData.Positions) > 0 {
 		monsterPosition = npcData.Positions[0]
 	}
 

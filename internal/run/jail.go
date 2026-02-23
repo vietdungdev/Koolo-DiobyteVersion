@@ -65,7 +65,7 @@ func (j Jail) Run(parameters *RunParameters) error {
 
 func (j Jail) killPitspawn() error {
 	monsterPosition := data.Position{}
-	if npcData, found := j.ctx.Data.NPCs.FindOneBySuperUniqueID(superunique.PitspawnFouldog); found {
+	if npcData, found := j.ctx.Data.NPCs.FindOneBySuperUniqueID(superunique.PitspawnFouldog); found && len(npcData.Positions) > 0 {
 		monsterPosition = npcData.Positions[0]
 	}
 
