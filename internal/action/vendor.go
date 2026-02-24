@@ -147,10 +147,11 @@ func shouldVisitVendor() bool {
 		return true
 	}
 
-	// TPs are critical for returning to town; always visit vendor to restock them
-	// regardless of current gold, so the character is never stranded without a
-	// way back to town.
-	if town.ShouldBuyTPs() {
+	// TPs are critical for returning to town; bypass the normal 1000-gold gate
+	// so the character is never stranded without a way back to town.
+	// Require at least 100 gold (cost of one TP scroll) to avoid a no-op
+	// vendor trip every town cycle when the character is truly broke.
+	if town.ShouldBuyTPs() && ctx.Data.PlayerUnit.TotalPlayerGold() >= 100 {
 		return true
 	}
 
