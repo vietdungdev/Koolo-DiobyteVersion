@@ -147,11 +147,18 @@ func shouldVisitVendor() bool {
 		return true
 	}
 
+	// TPs are critical for returning to town; always visit vendor to restock them
+	// regardless of current gold, so the character is never stranded without a
+	// way back to town.
+	if town.ShouldBuyTPs() {
+		return true
+	}
+
 	if ctx.Data.PlayerUnit.TotalPlayerGold() < 1000 {
 		return false
 	}
 
-	if ctx.BeltManager.ShouldBuyPotions() || town.ShouldBuyTPs() || town.ShouldBuyIDs() {
+	if ctx.BeltManager.ShouldBuyPotions() || town.ShouldBuyIDs() {
 		return true
 	}
 
