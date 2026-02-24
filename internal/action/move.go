@@ -581,6 +581,8 @@ func MoveTo(toFunc func() (data.Position, bool), options ...step.MoveOption) err
 				if err := UsePortalInTown(); err != nil {
 					return errors.New("path failed during moveto. player in town, target position outside of town and no tp")
 				}
+				// Restart the loop so the path is recalculated from the new position.
+				continue
 			} else if ctx.Data.PlayerUnit.Area == area.ArcaneSanctuary {
 				//try to go to the end of the tp lane to find target position
 				tpPad, err := getArcaneNextTeleportPadPosition(blacklistedPads)
@@ -689,10 +691,12 @@ func MoveTo(toFunc func() (data.Position, bool), options ...step.MoveOption) err
 
 			//Pick target position on path and convert path position to global coordinates
 			pathStep = min(maxPathStep, len(path)-1)
-			nextPathPos := path[pathStep]
-			nextPosition = utils.PositionAddCoords(nextPathPos, pathOffsetX, pathOffsetY)
-			if pather.DistanceFromPoint(nextPosition, targetPosition) <= minDistanceToFinishMoving {
-				nextPosition = targetPosition
+			if pathStep >= 0 {
+				nextPathPos := path[pathStep]
+				nextPosition = utils.PositionAddCoords(nextPathPos, pathOffsetX, pathOffsetY)
+				if pather.DistanceFromPoint(nextPosition, targetPosition) <= minDistanceToFinishMoving {
+					nextPosition = targetPosition
+				}
 			}
 		} else {
 			// In town: use path segmentation to avoid getting stuck on corners/objects
