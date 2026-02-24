@@ -1,149 +1,81 @@
-This fork is dedicated to completing the leveling feature and improving the bot.
-We're happy to announce that all classes are now supported for leveling!
+﻿# Koolo DiobyteVersion — Fork Differences Only
 
-While we're still ironing a few things out in the leveling feature, we have already made major changes to other parts of the bot like:
+This repository is a **fork** of [kwader2k/koolo](https://github.com/kwader2k/koolo). The contents of this README are
+intentionally limited to **changes introduced in this fork**; everything not mentioned here is inherited from the
+upstream project.
 
-* Optional usage of packets
-* Leveling sequencer + editor (customizable leveling)
-* Complete movement overhaul
-* Torch-System (Ubers)
-* Terror zones rework
-* Shopping bot
-* Dropper
-* Auto-Mule
-* Barb improvements
-* Improved Runeword maker (rerolling)
-* Pickit editor
-* Discord integration overhaul
-* Buff rework
-* Many qol features like mass-profile-management, improved class-selection, auto-char-creation, mass-auto-starting, etc.
+## What's different from upstream
 
-To name only a few!
+### Scheduler activation & dormant UI (`internal/bot/scheduler.go`, `internal/server/`)
 
-If you're interested in more features or want to give us your feedback, you can join our Discord server: https://discord.gg/5GCdFDbJnx
+- Per-supervisor scheduler activation tracking with mutex-guarded `ActivateCharacter`/`DeactivateCharacter`/`IsActivated` helpers.
+- Scheduler is automatically activated on non-manual starts (including auto-start flow) and deactivated on Stop.
+- Manual-mode supervisors are skipped by the scheduler to avoid interference.
+- HTTP API exposes `Activated`, `ScheduleSummary`, and `SimpleStopTime` fields in scheduler status responses;
+  a `scheduleSummary()` helper produces human-readable summaries for simple/duration/time-slots modes.
+- Dashboard CSS adds dormant and header-badge states; dashboard JS shows a compact scheduler badge, a dormant
+  summary when the scheduler is enabled but not yet activated, improved countdown rendering with
+  `countdown-live` elements, and a 30-second auto-refresh to keep countdowns accurate.
 
-Please know that this project is still in development, so you may encounter bugs. Please report them if you do. While we can't give you any direct support, we will eventually pick them up and resolve them. You are of course also very much invited to add possible fixes or new features via pull requests yourself.
+### Human-like timing & cursor randomness (`internal/utils/sleep.go`, multiple action files)
 
-Quick video tutorial "full setup & start leveling": https://www.youtube.com/watch?v=lgWgHzbO2l4
+- Click positions for buffs, CTA casts, and item pickup are jittered with small random offsets.
+- Pickup spiral coordinates receive per-step random offsets.
+- Attack and timing sleeps have +/- jitter added to break metronomic cast intervals.
+- Walk-polling replaces flat uniform sampling with **Gamma-based** sampling (`RandGammaDurationMs`).
+- Idle gaps use **log-normal** sampling (`RandLogNormal`).
+- Idle cursor-wander move counts use a skewed geometric-like distribution.
+- `utils/sleep.go` gains `RandGammaDurationMs` and `RandLogNormal`; `sessionMu` upgraded to `RWMutex`
+  with `RLock` in `sessionFatigue` for safer concurrent reads.
 
-Important information:
+### Bot state, stash safety & logging refactors (`internal/action/`, `internal/bot/`, `internal/context/`, `internal/game/`)
 
-As written more detailed below you need to install:
+- **Per-supervisor monster-state tracking** in `action/step/attack.go`: monster state maps are keyed
+  by bot name (mutex-guarded) to eliminate `UnitID` collisions between concurrent supervisors.
+- **Stash gold slice guards** in `action/stash.go`: length checks before indexing `StashedGold`,
+  safe total computation, removal of noisy debug prints.
+- `maxInteractions` in `action/step/pickup_item.go` made function-local so high-attempt modes get
+  extra tries and the global variable is removed.
+- `bot/bot.go` `shouldReturnToTown` simplified with early returns; never returns if already in town
+  or in UberTristram.
+- `bot/manager.go` preserves the `Runtime` field correctly across hot-reloads.
+- `bot/single_supervisor.go` removes the erroneous reset of `FailedToCreateGameAttempts` in the
+  modal-absent branch.
+- `context/context.go` `Get()` panics on unregistered goroutines to surface misuse; `getGoroutineID`
+  uses a smaller buffer and faster numeric parse.
+- `game/manager.go` and `game/packet_sender.go` replace `fmt` debug prints with structured `slog` logging.
+- `character/sorceress_leveling.go` debug messages converted to `ctx.Logger.Debug` with context fields.
 
-- Go (1.24, not 1.25!)
-- Garble (0.14.2, not 0.15.x)
+### Safety guards for nil/bounds panics (`internal/run/`, `internal/action/`, `internal/town/`)
 
-Make sure the game is set to English to prevent any language-related bugs.
+- Bounds checks added before accessing `NPC.Positions[0]` across `interaction.go`, `anya.go`,
+  `quests.go`, `cave.go`, `bone_ash.go`, `jail.go`, `izual.go`, `countess.go`, `A1.go`.
+- `action/move.go` shrine lookup: fix shadowed variable that caused the best-shrine result to always
+  be `nil`; result is now stored in a scoped variable and returned after the loop.
+- `action/repair.go`: remove unused import alias; call `context.Get()` directly.
+- `action/vendor.go`: replace removed `botCtx` alias with `context.Get()`; adjust Jamella key
+  sequence to skip `VK_DOWN`; enforce `MaxGameLength` only when it is greater than zero.
 
-Use better_build.bat to build the application.
+### Portal/waypoint refresh guards (`internal/run/leveling_act4.go`, `internal/run/leveling_act5.go`)
 
-- Choose your class and then pick the corresponding leveling build.
-- Choose "leveling" OR "leveling_sequence" as enabled run under "Run Settings". Don't enable them both at the same time as this will lead to faulty behaviour. We will remove "leveling" soon, so the sequencer will be the default.
-- Start your char with lvl 1 as the autoconfig currently works at lvl 1 only. Alternatively you can check leveling.go and leveling_sequence.go respectively for detailed manual config. This handling will be enhanced later.
+- After sending the Harrogath portal key sequence, wait, refresh game data, and re-query the portal;
+  return an error if it is still missing (both act-4 portal locations).
+- Act-5 waypoint usage guarded by existence check before calling `MoveToCoords` to prevent a nil
+  dereference.
 
 ---
-<div style="background-color: #FFFACD; padding: 10px; border-radius: 5px; text-align: center">
-  <h2 style="margin: 0;">⚠️ Warning: People using this tool have been reporting bans. Do not use it.</h2>
-</div>
-<p align="center">
-  <img src="assets/koolo.webp" alt="Koolo Resurrected" width="150">
-</p>
-<h3 align="center">Koolo Resurrected</h3>
+
+> For a file-level diff against upstream run:
+> ```sh
+> git fetch upstream && git diff --stat upstream/main
+> ```
+
+## Notes
+
+- The game must still be set to **English**. 1280x720 windowed mode and LOD 1.13c are required as usual.
+- All other documentation (installation, usage, pickit rules, etc.) is unchanged from upstream — refer to
+  the [kwader2k/koolo](https://github.com/kwader2k/koolo) README for full details.
 
 ---
 
-Koolo is a small bot for Diablo II: Resurrected (Expansion). Koolo project was built for informational and educational purposes
-only, it's not intended for online usage. Feel free to contribute opening pull requests with new features or bugfixes.
-Koolo reads game memory and interacts with the game injecting clicks/keystrokes to the game window. As good as it can.
-
-Feel free to join our Discord community to report bugs, ask for help or just to chat: [Koolo Resurrected Discord]( https://discord.gg/zgFMyzAFHE)
-
-## Disclaimer
-Can I get banned for using Koolo? The answer is a crystal clear yes, you can get banned although at this point I'm
-not aware of any ban for using it. I'm not responsible for any ban or any other consequence that may arise from it.
-
-## Features
-- Blizzard Sorceress, Nova Sorceress, FoH, Berserk Barbarian Hork (Travincal), Mosaic are currently supported. Hammerdin, Javazon and Winddruid are WIP
-- Supported runs: Countess, Andariel, Ancient Tunnels, Summoner, Mephisto, Council, Eldritch-Shenk, Endugu, Drifter Cavern, Pindleskin, Nihlathak,
-  Tristram, Lower Kurast and Superchests, Stony Tomb, The Pit, Arachnid Lair, Baal, Duriel, Tal Rasha Tombs, Diablo, Cows, Treshsocket
-- Multi window support (run multiple bots at the same time)
-- Bot integration for Discord and Telegram
-- "Companion mode" one leader bot will be creating games and the rest of the bots will join the game... (not working currently)
-- Pickit based on NIP files
-- Auto potion for health and mana (also mercenary)
-- Chicken when low health
-- Inventory slot locking
-- Revive mercenary
-- CTA buff and class buffs
-- Auto repair
-- Skip on immune
-- Auto leveling sorceress and paladin (WIP) this feature is not finished.
-- Auto gambling
-- Auto cubing and crafting (WIP)
-- Terror Zones (WIP)
-- Classic is not supported
-
-## Requirements
-- Diablo II: Resurrected (1280x720 required, windowed mode, ensure accessibility large fonts disabled)
-- **Diablo II: LOD 1.13c** (IMPORTANT: It will **NOT** work without it, this step is not optional)
-
-## Quick Start
-### Preparing the character
-- Koolo will read game keybindings in order to use the skills, doesn't matter what key is used, but the skills for the build must be set.
-- For blizzard sorceress, set the **left** skill to Glacial Spike or Ice Blast, and for Hammerdin to Blessed Hammer.
-- Foh set keybind for FOH and holybolt on left skill, conviction on right skill
-- Berserk barb set berserk as left skill. Also to use FindItem you need higher goldfind on secondary weapons slot. Alibaba + anything will work.
-- Buy TP and ID tomes and one stack of keys and keep them in the inventory, additionally set the TP tome to a key binding, this is **required**.
-- Horadric Cube can be stashed or kept in inventory, Koolo will use it to cube recipes if enabled.
-- Keep the charms in the inventory, Koolo can be configured to lock specific inventory slots.
-
-### Running the tool
-- If you haven't done yet, install **Diablo II: LOD 1.13c** (required)
-- [Download](https://github.com/hectorgimenez/koolo/releases) the latest Koolo release (recommended for most users), or alternatively you can [build it from source](#development-environment)
-- Extract the zip file in a directory of your choice.
-- Run `koolo.exe`.
-- Follow the setup wizard, it will guide you through the process of setting up the bot, you will need to setup some directories and character configuration.
-- If you want to back up/restore your configuration, and for manual setup, you can find the configuration files in the `config` directory.
-
-## Pickit rules
-Item pickit is based on [NIP files](https://github.com/blizzhackers/pickits/blob/master/NipGuide.md), you can find them in the `config/{character}/pickit` directory.
-
-All the .nip files contained in the pickit directory will be loaded, so you can have multiple pickit files.
-
-There are some considerations to take into account:
-- If item fully matches the pickit rule before being identified, it will be picked up and stashed unidentified.
-- If item doesn't match the full rule, will be identified and checked again, if fully matches a rule it will be stashed otherwise sold to vendor.
-- If there is an error on the NIP file or Koolo can not understand it, the application will not start.
-- Pickit rules can not be changed in runtime (yet), you will need to restart Koolo to apply changes.
-
-## Development environment
-**Note:** This is only required if you want to build the project from source. If you want to run the bot, you can just download the [latest release](https://github.com/hectorgimenez/koolo/releases).
-
-Setting the development environment is pretty straightforward, but the following dependencies are **required** to build the project.
-
-### Dependencies
-- [Download Go 1.24](https://go.dev/dl/) <ins>⚠️**not the version 1.25**⚠️</ins> 
-- [Install git](https://gitforwindows.org/)
-
-### Building from source
-
-First, we open the terminal and install [Garble](https://github.com/burrowers/garble) using the following command:
-```shell
-go install mvdan.cc/garble@v0.14.2
-```
-
-Next, run the following commands in project root directory:
-```shell
-git clone https://github.com/kwader2k/koolo.git
-cd koolo
-better_build.bat
-```
-This will produce the "build" directory with the executable file and all the required assets.
-
-### Updating with latest changes
-In order to fetch latest `main` branch changes run the following commands in project root directory:
-```shell
-git pull
-better_build.bat
-```
-**Note**: If you use `build.bat`, the `build` directory **will be deleted**, so if you customized any file(s) in there, make sure to backup it before running `build.bat`.
+*This README covers only the modifications made in this fork. See the upstream project for the full Koolo documentation.*
