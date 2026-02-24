@@ -330,9 +330,10 @@ func (s PaladinLeveling) KillAndariel() error {
 				s.Logger.Error("Andariel was not found, timeout reached.")
 				return errors.New("Andariel not found within the time limit")
 			}
-			// Move around to search for Andariel instead of standing idle
-			s.Logger.Debug("Andariel not detected yet, performing random movement to search.")
-			s.PathFinder.RandomMovement()
+			// Move toward Andariel's known throne position when she hasn't aggroed,
+			// rather than wandering randomly which may move away from her spawn.
+			s.Logger.Debug("Andariel not detected yet, moving toward her throne to search.")
+			action.MoveToCoords(data.Position{X: 22548, Y: 9520})
 			utils.Sleep(500)
 			continue
 		}
