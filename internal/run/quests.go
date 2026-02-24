@@ -57,7 +57,7 @@ func (a Quests) Run(parameters *RunParameters) error {
 	}
 
 	if a.ctx.CharacterCfg.Game.Quests.GetCube {
-		_, found := a.ctx.Data.Inventory.Find("HoradricCube", item.LocationInventory, item.LocationStash)
+		_, found := a.ctx.Data.Inventory.Find("HoradricCube", item.LocationInventory, item.LocationStash, item.LocationSharedStash)
 		if !found {
 			a.getHoradricCube()
 		}

@@ -417,7 +417,7 @@ func CubeRecipes() error {
 
 	// Leveling can enable cube recipes before acquiring the cube.
 	// Skip recipe processing until the Horadric Cube is available.
-	if _, hasCube := ctx.Data.Inventory.Find("HoradricCube", item.LocationInventory, item.LocationStash); !hasCube {
+	if _, hasCube := ctx.Data.Inventory.Find("HoradricCube", item.LocationInventory, item.LocationStash, item.LocationSharedStash); !hasCube {
 		ctx.Logger.Debug("Cube recipes enabled but Horadric Cube not found, skipping")
 		return nil
 	}
