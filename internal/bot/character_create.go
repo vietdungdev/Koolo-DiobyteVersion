@@ -21,7 +21,7 @@ var classCoords = map[string][2]int{
 	"amazon": {ui.CharAmazonX, ui.CharAmazonY}, "assassin": {ui.CharAssassinX, ui.CharAssassinY},
 	"necro": {ui.CharNecroX, ui.CharNecroY}, "barb": {ui.CharBarbX, ui.CharBarbY},
 	"pala": {ui.CharPallyX, ui.CharPallyY}, "sorc": {ui.CharSorcX, ui.CharSorcY},
-	"druid": {ui.CharDruidX, ui.CharDruidY},
+	"druid": {ui.CharDruidX, ui.CharDruidY}, "warlock": {ui.CharWarlockX, ui.CharWarlockY},
 }
 
 const (

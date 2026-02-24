@@ -122,8 +122,10 @@ func (a TalRashaTombs) Run(parameters *RunParameters) error {
 			}
 		}
 
-		// Return to town before moving to the next tomb.
-		if err = action.ReturnTown(); err != nil {
+		// Return to town and refill consumables before the next tomb.
+		// Using InRunReturnTownRoutine instead of bare ReturnTown so that
+		// TP scrolls, potions, and belt slots are restocked between clears.
+		if err = action.InRunReturnTownRoutine(); err != nil {
 			return err
 		}
 
