@@ -116,12 +116,15 @@ var simpleAndarielAttackPos1 = data.Position{
 // andarielSearchPositions are additional points deeper in the room to move to
 // if Andariel is not visible from the initial attack position. The bot walks
 // through these sequentially until she is found or all are exhausted.
+// The final positions approach Andariel's throne area so she is reachable even
+// when she has not aggroed and remains at her spawn location.
 var andarielSearchPositions = []data.Position{
 	{X: 22548, Y: 9560},
 	{X: 22560, Y: 9550},
 	{X: 22548, Y: 9540},
 	{X: 22535, Y: 9550},
 	{X: 22548, Y: 9530},
+	{X: 22548, Y: 9520}, // Approach Andariel's throne directly when she hasn't moved
 }
 
 type Andariel struct {
