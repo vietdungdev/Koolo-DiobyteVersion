@@ -32,6 +32,16 @@ type SchedulerStatusInfo struct {
 	WaitingForSchedule bool `json:"waitingForSchedule"`
 	// ScheduledStartTime is the RFC3339 time the bot will auto-start.
 	ScheduledStartTime string `json:"scheduledStartTime"`
+	// Activated is true when the user has opted this character into scheduler
+	// management by clicking Play. The scheduler is dormant until activated.
+	Activated bool `json:"activated"`
+	// ScheduleSummary is a human-readable description of the configured schedule
+	// (e.g. "08:00–22:00" or "Duration: 14h play"). Shown in the dormant state
+	// and the collapsed header so users know what the schedule is at a glance.
+	ScheduleSummary string `json:"scheduleSummary"`
+	// SimpleStopTime is the configured stop time for simple mode, surfaced so the
+	// dashboard can display the full window (start–stop) in countdown displays.
+	SimpleStopTime string `json:"simpleStopTime,omitempty"`
 }
 
 type SchedulerBreak struct {

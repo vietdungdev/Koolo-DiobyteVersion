@@ -99,6 +99,7 @@ function createCharacterCard(key) {
                     </label>
                     <span>${key}</span>
                      <div class="status-indicator"></div>
+                     <span class="scheduler-header-badge" style="display:none;"></span>
                      <div class="co-line co-line-with-stats">
                       <div class="co-info-left">
                         <span class="co-classlevel">Class/Level (Exp)</span>
@@ -385,6 +386,12 @@ function updateCharacterCard(card, key, value, dropCount, schedulerInfo) {
   if (schedulerStatusDiv) {
     updateSchedulerStatus(schedulerStatusDiv, schedulerInfo);
   }
+
+  // Update compact scheduler badge in the collapsed header
+  const headerBadge = card.querySelector(".scheduler-header-badge");
+  if (headerBadge) {
+    updateSchedulerHeaderBadge(headerBadge, schedulerInfo, value.SupervisorStatus);
+  }
 }
 
 // Format time remaining as "Xh Ym" or "Ym"
@@ -405,6 +412,19 @@ function formatTime(timeStr) {
 }
 
 function updateSchedulerStatus(container, info) {
+  // If scheduler is enabled but not activated, show dormant state with schedule summary
+  if (info && info.enabled && !info.activated && !info.waitingForSchedule) {
+    container.style.display = "block";
+    const phaseDiv = container.querySelector(".scheduler-phase");
+    const infoDiv = container.querySelector(".scheduler-info");
+    const nextDiv = container.querySelector(".scheduler-next");
+    phaseDiv.innerHTML = '<span class="scheduler-phase-badge phase-dormant">SCHEDULER IDLE</span>';
+    const summary = info.scheduleSummary ? ` <span class="scheduler-summary">${info.scheduleSummary}</span>` : "";
+    infoDiv.innerHTML = `<span>Click Play to activate the scheduler.${summary}</span>`;
+    nextDiv.innerHTML = "";
+    return;
+  }
+
   // Show waiting-for-schedule panel regardless of mode when a pending start is active.
   if (info && info.waitingForSchedule) {
     container.style.display = "block";
@@ -415,25 +435,31 @@ function updateSchedulerStatus(container, info) {
 
     phaseDiv.innerHTML = '<span class="scheduler-phase-badge phase-waiting">WAITING FOR SCHEDULE</span>';
     if (info.scheduledStartTime) {
-      infoDiv.innerHTML = `<span>Starting at: ${formatTime(info.scheduledStartTime)}</span> &nbsp;(in ${formatCountdown(info.scheduledStartTime)})`;
+      infoDiv.innerHTML = `<span>Starting at: ${formatTime(info.scheduledStartTime)}</span> &nbsp;<span class="countdown-live" data-target="${info.scheduledStartTime}">(in ${formatCountdown(info.scheduledStartTime)})</span>`;
     } else {
-      infoDiv.innerHTML = '<span>Waiting for next schedule window…</span>';
+      infoDiv.innerHTML = '<span>Waiting for next schedule window\u2026</span>';
     }
     nextDiv.innerHTML = "";
     return;
   }
 
-  // For simple mode: show next window start when the bot is idle outside the active window.
-  if (info && info.enabled && (info.mode === "simple" || info.mode === "")) {
+  // For simple/timeSlots modes: show next window countdown when idle outside the active window.
+  if (info && info.enabled && info.mode !== "duration") {
     if (info.scheduledStartTime) {
       container.style.display = "block";
       const phaseDiv = container.querySelector(".scheduler-phase");
       const infoDiv = container.querySelector(".scheduler-info");
       const nextDiv = container.querySelector(".scheduler-next");
       phaseDiv.innerHTML = '<span class="scheduler-phase-badge phase-resting">SCHEDULED</span>';
-      infoDiv.innerHTML = `<span>Next window: ${formatTime(info.scheduledStartTime)}</span> &nbsp;(in ${formatCountdown(info.scheduledStartTime)})`;
+      // Show full window for simple mode (start–stop), just time for timeSlots
+      let windowText = `Next window: ${formatTime(info.scheduledStartTime)}`;
+      if ((info.mode === "simple" || info.mode === "") && info.simpleStopTime) {
+        windowText += `\u2013${info.simpleStopTime}`;
+      }
+      infoDiv.innerHTML = `<span>${windowText}</span> &nbsp;<span class="countdown-live" data-target="${info.scheduledStartTime}">(in ${formatCountdown(info.scheduledStartTime)})</span>`;
       nextDiv.innerHTML = "";
     } else {
+      // Activated and within the window — nothing extra to show for simple/timeSlots
       container.style.display = "none";
     }
     return;
@@ -462,11 +488,11 @@ function updateSchedulerStatus(container, info) {
     const playedHours = Math.floor(info.playedMinutes / 60);
     const playedMins = info.playedMinutes % 60;
     const playedStr = playedHours > 0 ? `${playedHours}h ${playedMins}m` : `${playedMins}m`;
-    infoDiv.innerHTML = `<span>Started: ${formatTime(info.phaseStartTime)}</span> • <span>Played: ${playedStr}</span>`;
+    infoDiv.innerHTML = `<span>Started: ${formatTime(info.phaseStartTime)}</span> \u2022 <span>Played: ${playedStr}</span>`;
   } else if (info.phase === "onBreak") {
-    infoDiv.innerHTML = `<span>Break until: ${formatTime(info.phaseEndTime)}</span> (${formatCountdown(info.phaseEndTime)})`;
+    infoDiv.innerHTML = `<span>Break until: ${formatTime(info.phaseEndTime)}</span> <span class="countdown-live" data-target="${info.phaseEndTime}">(${formatCountdown(info.phaseEndTime)})</span>`;
   } else {
-    infoDiv.innerHTML = `<span>Resting until: ${formatTime(info.todayWakeTime)}</span> (${formatCountdown(info.todayWakeTime)})`;
+    infoDiv.innerHTML = `<span>Resting until: ${formatTime(info.todayWakeTime)}</span> <span class="countdown-live" data-target="${info.todayWakeTime}">(${formatCountdown(info.todayWakeTime)})</span>`;
   }
 
   // Next events
@@ -475,13 +501,60 @@ function updateSchedulerStatus(container, info) {
     nextHtml = "<div class='scheduler-next-title'>Next:</div>";
     info.nextBreaks.slice(0, 3).forEach((brk, i) => {
       const label = brk.type === "meal" ? "Meal break" : "Short break";
-      nextHtml += `<div class="scheduler-next-item">${label} at ${formatTime(brk.startTime)} (${brk.duration}min) - in ${formatCountdown(brk.startTime)}</div>`;
+      nextHtml += `<div class="scheduler-next-item">${label} at ${formatTime(brk.startTime)} (${brk.duration}min) - <span class="countdown-live" data-target="${brk.startTime}">in ${formatCountdown(brk.startTime)}</span></div>`;
     });
   }
   if (info.todayRestTime && info.phase === "playing") {
-    nextHtml += `<div class="scheduler-rest-time">Rest begins: ~${formatTime(info.todayRestTime)} (in ${formatCountdown(info.todayRestTime)})</div>`;
+    nextHtml += `<div class="scheduler-rest-time">Rest begins: ~${formatTime(info.todayRestTime)} <span class="countdown-live" data-target="${info.todayRestTime}">(in ${formatCountdown(info.todayRestTime)})</span></div>`;
   }
   nextDiv.innerHTML = nextHtml;
+}
+
+// updateSchedulerHeaderBadge shows a compact scheduler indicator in the collapsed
+// card header so users can see scheduler state without expanding the card.
+function updateSchedulerHeaderBadge(badge, info, supervisorStatus) {
+  if (!info || !info.enabled) {
+    badge.style.display = "none";
+    return;
+  }
+
+  badge.style.display = "inline-flex";
+
+  // Dormant (not activated)
+  if (!info.activated && !info.waitingForSchedule) {
+    badge.className = "scheduler-header-badge shb-idle";
+    badge.innerHTML = '<i class="bi bi-clock"></i>';
+    badge.title = "Scheduler idle" + (info.scheduleSummary ? " \u2022 " + info.scheduleSummary : "");
+    return;
+  }
+
+  // Waiting for schedule window
+  if (info.waitingForSchedule) {
+    badge.className = "scheduler-header-badge shb-waiting";
+    badge.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    badge.title = "Waiting for schedule" + (info.scheduledStartTime ? " \u2022 starts " + formatTime(info.scheduledStartTime) : "");
+    return;
+  }
+
+  // Active and running
+  const isRunning = supervisorStatus === "In game" || supervisorStatus === "Starting";
+  if (isRunning) {
+    badge.className = "scheduler-header-badge shb-active";
+    badge.innerHTML = '<i class="bi bi-calendar-check"></i>';
+    badge.title = "Scheduler managing" + (info.scheduleSummary ? " \u2022 " + info.scheduleSummary : "");
+    return;
+  }
+
+  // Activated but not running (paused or between games / outside window)
+  if (info.scheduledStartTime) {
+    badge.className = "scheduler-header-badge shb-scheduled";
+    badge.innerHTML = '<i class="bi bi-calendar-event"></i>';
+    badge.title = "Scheduled \u2022 next: " + formatTime(info.scheduledStartTime);
+  } else {
+    badge.className = "scheduler-header-badge shb-active";
+    badge.innerHTML = '<i class="bi bi-calendar-check"></i>';
+    badge.title = "Scheduler active" + (info.scheduleSummary ? " \u2022 " + info.scheduleSummary : "");
+  }
 }
 
 function updateStatusIndicator(statusIndicator, status) {
@@ -1542,4 +1615,22 @@ document.addEventListener("DOMContentLoaded", function () {
   fetchInitialData();
   connectWebSocket();
   restoreExpandedState();
+
+  // Refresh all countdown-live elements every 30 seconds so countdowns stay
+  // accurate between WebSocket pushes without excessive DOM churn.
+  setInterval(function () {
+    document.querySelectorAll(".countdown-live[data-target]").forEach(function (el) {
+      const target = el.getAttribute("data-target");
+      if (target) {
+        const diff = new Date(target) - new Date();
+        if (diff <= 0) {
+          el.textContent = "(now)";
+        } else {
+          const hours = Math.floor(diff / 3600000);
+          const mins = Math.floor((diff % 3600000) / 60000);
+          el.textContent = hours > 0 ? `(in ${hours}h ${mins}m)` : `(in ${mins}m)`;
+        }
+      }
+    });
+  }, 30000);
 });

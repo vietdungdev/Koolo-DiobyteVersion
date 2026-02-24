@@ -68,6 +68,13 @@ type Scheduler struct {
 	// Duration mode state (per supervisor)
 	durationState map[string]*DurationState
 	stateMux      sync.RWMutex
+
+	// activated tracks supervisors the user has opted-in for scheduler
+	// management by clicking Play in the GUI (non-manual). The scheduler
+	// only processes characters present in this map. Clicking Stop removes
+	// the entry so the scheduler becomes dormant for that character again.
+	activated    map[string]bool
+	activatedMux sync.RWMutex
 }
 
 func NewScheduler(manager *SupervisorManager, logger *slog.Logger) *Scheduler {
@@ -76,6 +83,7 @@ func NewScheduler(manager *SupervisorManager, logger *slog.Logger) *Scheduler {
 		logger:        logger,
 		stop:          make(chan struct{}),
 		durationState: make(map[string]*DurationState),
+		activated:     make(map[string]bool),
 	}
 
 	// Load persisted state for all characters
@@ -107,6 +115,17 @@ func (s *Scheduler) Stop() {
 func (s *Scheduler) checkSchedules() {
 	for supervisorName, cfg := range config.GetCharacters() {
 		if !cfg.Scheduler.Enabled {
+			continue
+		}
+
+		// The scheduler only manages characters that the user has activated
+		// by clicking Play in the GUI. Until then it stays dormant.
+		if !s.IsActivated(supervisorName) {
+			continue
+		}
+
+		// Never interfere with supervisors running in manual mode.
+		if s.isSupervisorInManualMode(supervisorName) {
 			continue
 		}
 
@@ -172,7 +191,7 @@ func (s *Scheduler) checkSimpleSchedule(supervisorName string, cfg *config.Chara
 			slog.String("window", cfg.Scheduler.SimpleStartTime+"-"+cfg.Scheduler.SimpleStopTime),
 		)
 		go s.startSupervisor(supervisorName)
-	} else if !inWindow && !s.supervisorNotStarted(supervisorName) {
+	} else if !inWindow && !s.supervisorNotStarted(supervisorName) && !s.isSupervisorInManualMode(supervisorName) {
 		s.logger.Info("Stopping supervisor (simple schedule)",
 			slog.String("supervisor", supervisorName),
 			slog.String("window", cfg.Scheduler.SimpleStartTime+"-"+cfg.Scheduler.SimpleStopTime),
@@ -222,7 +241,7 @@ func (s *Scheduler) checkTimeSlotsSchedule(supervisorName string, cfg *config.Ch
 				go s.startSupervisor(supervisorName)
 				actionTaken = true
 				break
-			} else if (now.After(end) || now.Equal(end) || now.Before(start)) && !s.supervisorNotStarted(supervisorName) {
+			} else if (now.After(end) || now.Equal(end) || now.Before(start)) && !s.supervisorNotStarted(supervisorName) && !s.isSupervisorInManualMode(supervisorName) {
 				s.logger.Info("Stopping supervisor based on schedule",
 					"supervisor", supervisorName,
 					"timeRange", start.Format("15:04")+" - "+end.Format("15:04"))
@@ -1005,6 +1024,44 @@ func (s *Scheduler) GetSchedulerHistory(supervisorName string) *SchedulerHistory
 }
 
 // Helper functions
+
+// isSupervisorInManualMode returns true if the named supervisor is currently
+// running in manual play mode. The scheduler must never start, stop, or
+// otherwise interfere with a manual-mode supervisor.
+func (s *Scheduler) isSupervisorInManualMode(name string) bool {
+	stats := s.manager.GetSupervisorStats(name)
+	return stats.ManualModeActive
+}
+
+// ActivateCharacter marks a supervisor as opted-in for scheduler management.
+// The scheduler will begin checking the schedule and starting/stopping the
+// supervisor on its tick. Called when the user clicks Play (non-manual).
+func (s *Scheduler) ActivateCharacter(name string) {
+	s.activatedMux.Lock()
+	s.activated[name] = true
+	s.activatedMux.Unlock()
+	s.logger.Info("Scheduler activated for supervisor",
+		slog.String("supervisor", name))
+}
+
+// DeactivateCharacter removes a supervisor from scheduler management.
+// The scheduler will stop processing this character until it is activated
+// again. Called when the user clicks Stop.
+func (s *Scheduler) DeactivateCharacter(name string) {
+	s.activatedMux.Lock()
+	delete(s.activated, name)
+	s.activatedMux.Unlock()
+	s.logger.Info("Scheduler deactivated for supervisor",
+		slog.String("supervisor", name))
+}
+
+// IsActivated returns true if the supervisor has been activated for
+// scheduler management (the user clicked Play).
+func (s *Scheduler) IsActivated(name string) bool {
+	s.activatedMux.RLock()
+	defer s.activatedMux.RUnlock()
+	return s.activated[name]
+}
 
 func (s *Scheduler) supervisorNotStarted(name string) bool {
 	stats := s.manager.GetSupervisorStats(name)

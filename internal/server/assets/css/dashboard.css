@@ -794,6 +794,73 @@ body {
   color: #8fa8d4;
 }
 
+.scheduler-phase-badge.phase-dormant {
+  background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+  color: #a0aec0;
+}
+
+/* Schedule summary shown in the dormant state */
+.scheduler-summary {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-sm);
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}
+
+/* ----------------------------------------
+   SCHEDULER HEADER BADGE (collapsed card)
+   ---------------------------------------- */
+.scheduler-header-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  font-size: 0.7em;
+  margin-left: 6px;
+  cursor: default;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.scheduler-header-badge i {
+  font-size: 0.85em;
+}
+
+/* Idle / dormant — muted gray */
+.shb-idle {
+  background: rgba(74, 85, 104, 0.5);
+  color: #a0aec0;
+}
+
+/* Waiting for schedule — muted blue */
+.shb-waiting {
+  background: rgba(58, 74, 107, 0.6);
+  color: #8fa8d4;
+  animation: shb-pulse 2s ease-in-out infinite;
+}
+
+/* Active / running under scheduler — green */
+.shb-active {
+  background: rgba(40, 167, 69, 0.4);
+  color: #5cd67b;
+}
+
+/* Scheduled (waiting for next window) — amber */
+.shb-scheduled {
+  background: rgba(255, 171, 0, 0.3);
+  color: #ffcc56;
+}
+
+@keyframes shb-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
 .scheduler-info {
   margin-top: var(--spacing-sm);
   color: var(--text-secondary);

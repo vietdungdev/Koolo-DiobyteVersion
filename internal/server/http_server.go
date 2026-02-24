@@ -857,8 +857,10 @@ func (s *HttpServer) getStatusData() IndexData {
 			}
 
 			info := &SchedulerStatusInfo{
-				Enabled: cfg.Scheduler.Enabled,
-				Mode:    cfg.Scheduler.Mode,
+				Enabled:         cfg.Scheduler.Enabled,
+				Mode:            cfg.Scheduler.Mode,
+				Activated:       s.scheduler.IsActivated(supervisorName),
+				ScheduleSummary: scheduleSummary(cfg),
 			}
 
 			// For duration mode, get live state from scheduler
@@ -889,14 +891,20 @@ func (s *HttpServer) getStatusData() IndexData {
 				}
 			}
 
-			// For simple mode: surface the next window start when currently outside
-			// the active window so the dashboard can show a countdown.
-			if (cfg.Scheduler.Mode == "simple" || cfg.Scheduler.Mode == "") && cfg.Scheduler.Enabled && s.scheduler != nil {
+			// For simple and timeSlots modes: surface the next window start
+			// when currently outside the active window so the dashboard can
+			// show a countdown.
+			if cfg.Scheduler.Enabled && s.scheduler != nil && cfg.Scheduler.Mode != "duration" {
 				if !s.scheduler.IsWithinSchedule(supervisorName, cfg) {
 					nextStart := s.scheduler.NextWindowStart(supervisorName, cfg)
 					if !nextStart.IsZero() {
 						info.ScheduledStartTime = nextStart.Format(time.RFC3339)
 					}
+				}
+				// For simple mode, also expose the configured stop time so the
+				// dashboard can display the full window range.
+				if cfg.Scheduler.Mode == "simple" || cfg.Scheduler.Mode == "" {
+					info.SimpleStopTime = cfg.Scheduler.SimpleStopTime
 				}
 			}
 
@@ -934,6 +942,60 @@ func (s *HttpServer) getStatusData() IndexData {
 		SchedulerStatus:             schedulerStatus,
 		GlobalAutoStartEnabled:      config.Koolo.AutoStart.Enabled,
 		GlobalAutoStartDelaySeconds: config.Koolo.AutoStart.DelaySeconds,
+	}
+}
+
+// scheduleSummary returns a human-readable one-liner describing the configured
+// schedule for a character (e.g. "08:00–22:00" or "Duration: 14h play").
+// Used in the dormant state and the collapsed card header so users can see the
+// schedule at a glance without expanding the card.
+func scheduleSummary(cfg *config.CharacterCfg) string {
+	if !cfg.Scheduler.Enabled {
+		return ""
+	}
+
+	mode := cfg.Scheduler.Mode
+	if mode == "" {
+		mode = "simple"
+	}
+
+	switch mode {
+	case "simple":
+		start := cfg.Scheduler.SimpleStartTime
+		stop := cfg.Scheduler.SimpleStopTime
+		if start == "" || stop == "" {
+			return "Simple (not configured)"
+		}
+		return start + "–" + stop
+
+	case "duration":
+		h := cfg.Scheduler.Duration.PlayHours
+		if h == 0 {
+			return "Duration (not configured)"
+		}
+		wake := cfg.Scheduler.Duration.WakeUpTime
+		if wake == "" {
+			return fmt.Sprintf("Duration: %dh play", h)
+		}
+		return fmt.Sprintf("Duration: %dh play, wake %s", h, wake)
+
+	default: // timeSlots
+		if len(cfg.Scheduler.Days) == 0 {
+			return "Time Slots (not configured)"
+		}
+		dayNames := []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
+		activeDays := make([]string, 0, 7)
+		seen := make(map[int]bool)
+		for _, d := range cfg.Scheduler.Days {
+			if !seen[d.DayOfWeek] && d.DayOfWeek >= 0 && d.DayOfWeek <= 6 {
+				activeDays = append(activeDays, dayNames[d.DayOfWeek])
+				seen[d.DayOfWeek] = true
+			}
+		}
+		if len(activeDays) == 7 {
+			return "Time Slots: every day"
+		}
+		return "Time Slots: " + strings.Join(activeDays, ", ")
 	}
 }
 
@@ -1214,9 +1276,16 @@ func (s *HttpServer) startSupervisor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// For non-manual starts when the scheduler is enabled, activate the
+	// character so the scheduler begins managing it from this point forward.
+	if !manualMode && s.scheduler != nil && supCfg.Scheduler.Enabled {
+		s.scheduler.ActivateCharacter(supervisor)
+	}
+
+	// Manual mode bypasses the scheduler entirely — start immediately.
 	// If the scheduler is configured and now is outside the active window, register a
 	// pending start that will fire automatically when the next window opens.
-	if s.scheduler != nil && supCfg.Scheduler.Enabled && !s.scheduler.IsWithinSchedule(supervisor, supCfg) {
+	if !manualMode && s.scheduler != nil && supCfg.Scheduler.Enabled && !s.scheduler.IsWithinSchedule(supervisor, supCfg) {
 		nextStart := s.scheduler.NextWindowStart(supervisor, supCfg)
 		if !nextStart.IsZero() {
 			s.pendingStartsMux.Lock()
@@ -1414,6 +1483,16 @@ func (s *HttpServer) autoStartOnceInternal() error {
 				"name", name,
 				"position", fmt.Sprintf("%d/%d", i+1, len(targets)))
 
+			// If the character has a scheduler, activate it so the scheduler
+			// takes over management. The scheduler will decide whether to
+			// start the game based on the current schedule window.
+			if s.scheduler != nil && cfg.Scheduler.Enabled {
+				s.scheduler.ActivateCharacter(name)
+				s.logger.Info("Auto-start activated scheduler for character",
+					"name", name)
+				continue // Let the scheduler handle starting
+			}
+
 			// Run each supervisor start in its own goroutine so that
 			// a long-running Start call for one character does not block
 			// the scheduling of subsequent characters.
@@ -1453,6 +1532,13 @@ func (s *HttpServer) stopSupervisor(w http.ResponseWriter, r *http.Request) {
 	}
 	// Also cancel any pending schedule wait so the play button resets to "Not Started".
 	s.cancelPendingStart(name)
+
+	// Deactivate the scheduler for this supervisor so it won't manage it
+	// anymore until the user clicks Play again.
+	if s.scheduler != nil {
+		s.scheduler.DeactivateCharacter(name)
+	}
+
 	s.manager.Stop(name)
 	s.initialData(w, r)
 }
