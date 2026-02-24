@@ -242,7 +242,12 @@ func (s *Status) PauseIfNotPriority() {
 	}
 }
 func (ctx *Context) WaitForGameToLoad() {
+	deadline := time.Now().Add(30 * time.Second)
 	for ctx.Data.OpenMenus.LoadingScreen {
+		if time.Now().After(deadline) {
+			ctx.Logger.Warn("WaitForGameToLoad timed out after 30s, proceeding anyway")
+			break
+		}
 		time.Sleep(100 * time.Millisecond)
 		ctx.RefreshGameData()
 	}

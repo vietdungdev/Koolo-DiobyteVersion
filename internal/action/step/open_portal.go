@@ -35,6 +35,8 @@ func OpenPortal() error {
 	}
 
 	lastRun := time.Time{}
+	const maxPortalAttempts = 10
+	portalAttempts := 0
 	for {
 		// IMPORTANT: Check for player death at the beginning of each loop iteration
 		if ctx.Data.PlayerUnit.IsDead() && !ctx.Data.PlayerUnit.Area.IsTown() {
@@ -53,6 +55,12 @@ func OpenPortal() error {
 		// Give some time to portal to popup before retrying...
 		if time.Since(lastRun) < time.Millisecond*1000 {
 			continue
+		}
+
+		// Prevent infinite loop if portal never appears
+		portalAttempts++
+		if portalAttempts > maxPortalAttempts {
+			return errors.New("failed to open portal after maximum attempts")
 		}
 
 		usedKB := false

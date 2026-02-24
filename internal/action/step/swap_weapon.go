@@ -18,6 +18,8 @@ func SwapToCTA() error {
 
 func swapWeapon(toCTA bool) error {
 	lastRun := time.Time{}
+	const maxSwapAttempts = 6
+	attempts := 0
 
 	ctx := context.Get()
 	ctx.SetLastStep("SwapToCTA")
@@ -35,9 +37,19 @@ func swapWeapon(toCTA bool) error {
 			return nil
 		}
 
+		if attempts >= maxSwapAttempts {
+			if toCTA {
+				ctx.Logger.Warn("Failed to swap to CTA after max attempts, BattleOrders not found on either weapon set")
+			} else {
+				ctx.Logger.Warn("Failed to swap to main weapon after max attempts")
+			}
+			return nil
+		}
+
 		ctx.HID.PressKeyBinding(ctx.Data.KeyBindings.SwapWeapons)
 		utils.PingSleep(utils.Light, 150)
 
+		attempts++
 		lastRun = time.Now()
 	}
 }
