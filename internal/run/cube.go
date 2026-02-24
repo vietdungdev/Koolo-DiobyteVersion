@@ -32,7 +32,7 @@ func (c Cube) CheckConditions(parameters *RunParameters) SequencerResult {
 	if !c.ctx.Data.Quests[quest.Act1SistersToTheSlaughter].Completed() {
 		return SequencerStop
 	}
-	_, found := c.ctx.Data.Inventory.Find("HoradricCube", item.LocationInventory, item.LocationStash)
+	_, found := c.ctx.Data.Inventory.Find("HoradricCube", item.LocationInventory, item.LocationStash, item.LocationSharedStash)
 	if found {
 		return SequencerSkip
 	}
