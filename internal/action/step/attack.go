@@ -456,13 +456,13 @@ func ensureEnemyIsInRange(monster data.Monster, state *attackState, maxDistance,
 
 	// Handle repositioning if needed (due to no damage, or no LoS for burst attacks)
 	if needsRepositioning {
-		// If we've already tried repositioning once for this "stuck" phase
-		if state.repositionAttempts >= 1 { // This is the problematic part. User wants to allow 1 attempt.
+		// If we've exhausted all repositioning attempts for this "stuck" phase
+		if state.repositionAttempts >= 3 {
 			ctx.Logger.Info(fmt.Sprintf(
-				"Already attempted repositioning for monster [%d] in area [%s]. Skipping further attempts and considering monster unkillable.", // Updated log message
-				monster.Name, ctx.Data.PlayerUnit.Area.Area().Name,
+				"Exhausted %d repositioning attempts for monster [%d] in area [%s]. Considering monster unkillable.",
+				state.repositionAttempts, monster.Name, ctx.Data.PlayerUnit.Area.Area().Name,
 			))
-			return ErrMonsterUnreachable // <-- CHANGE: Return specific error
+			return ErrMonsterUnreachable
 		}
 
 		// Check if enough time has passed since the last reposition attempt (cooldown)
@@ -471,7 +471,7 @@ func ensureEnemyIsInRange(monster data.Monster, state *attackState, maxDistance,
 		}
 
 		ctx.Logger.Info(fmt.Sprintf(
-			"No damage taken by target monster [%d] in area [%s] for more than 3 seconds. Trying to re-position (attempt %d/1)",
+			"No damage taken by target monster [%d] in area [%s] for more than 3 seconds. Trying to re-position (attempt %d/3)",
 			monster.Name, ctx.Data.PlayerUnit.Area.Area().Name, state.repositionAttempts+1,
 		))
 
@@ -481,8 +481,8 @@ func ensureEnemyIsInRange(monster data.Monster, state *attackState, maxDistance,
 		if err != nil {
 			ctx.Logger.Error(fmt.Sprintf("MoveTo failed during reposition attempt for monster [%d]: %v", monster.Name, err))
 			// Do NOT update lastRepositionTime here if MoveTo completely failed, so it can try again sooner if the path clears.
-			// However, since we're only allowing ONE attempt, the increment of repositionAttempts handles the "give up" logic.
-			return nil // Continue attacking, but the next loop iteration will hit repositionAttempts >= 1 and return ErrMonsterUnreachable
+			// The increment of repositionAttempts handles the "give up" logic after 3 failed attempts.
+			return nil // Continue attacking, the next loop iteration will re-evaluate repositionAttempts
 		}
 		state.lastRepositionTime = time.Now() // Update the last reposition time only if MoveTo was initiated without error
 		return nil                            // Successfully initiated the move, continue attacking next loop iteration

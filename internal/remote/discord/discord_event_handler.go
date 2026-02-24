@@ -110,7 +110,7 @@ func (b *Bot) sendItemScreenshot(ctx context.Context, message string, image []by
 
 	reader := bytes.NewReader(image)
 	_, err := b.discordSession.ChannelMessageSendComplex(b.itemChannel(), &discordgo.MessageSend{
-		File:    &discordgo.File{Name: "Screenshot.jpeg", ContentType: "image/jpeg", Reader: reader},
+		Files:   []*discordgo.File{{Name: "Screenshot.jpeg", ContentType: "image/jpeg", Reader: reader}},
 		Content: message,
 	})
 	return err
@@ -448,7 +448,7 @@ func (b *Bot) sendScreenshot(ctx context.Context, message string, image []byte) 
 
 	reader := bytes.NewReader(image)
 	_, err := b.discordSession.ChannelMessageSendComplex(b.channelID, &discordgo.MessageSend{
-		File:    &discordgo.File{Name: "Screenshot.jpeg", ContentType: "image/jpeg", Reader: reader},
+		Files:   []*discordgo.File{{Name: "Screenshot.jpeg", ContentType: "image/jpeg", Reader: reader}},
 		Content: message,
 	})
 	return err

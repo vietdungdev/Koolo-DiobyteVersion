@@ -224,15 +224,14 @@ func main() {
 			config.Koolo.Discord.ItemWebhookURL,
 		)
 		if err != nil {
-			logger.Error("Discord could not been initialized", slog.Any("error", err))
-			return
-		}
-
-		eventListener.Register(discordBot.Handle)
-		if !config.Koolo.Discord.UseWebhook {
-			g.Go(wrapWithRecover(logger, func() error {
-				return discordBot.Start(ctx)
-			}))
+			logger.Warn("Discord could not be initialized, continuing without Discord", slog.Any("error", err))
+		} else {
+			eventListener.Register(discordBot.Handle)
+			if !config.Koolo.Discord.UseWebhook {
+				g.Go(wrapWithRecover(logger, func() error {
+					return discordBot.Start(ctx)
+				}))
+			}
 		}
 	}
 
@@ -240,14 +239,13 @@ func main() {
 	if config.Koolo.Telegram.Enabled {
 		telegramBot, err := telegram.NewBot(config.Koolo.Telegram.Token, config.Koolo.Telegram.ChatID, logger)
 		if err != nil {
-			logger.Error("Telegram could not been initialized", slog.Any("error", err))
-			return
+			logger.Warn("Telegram could not be initialized, continuing without Telegram", slog.Any("error", err))
+		} else {
+			eventListener.Register(telegramBot.Handle)
+			g.Go(wrapWithRecover(logger, func() error {
+				return telegramBot.Start(ctx)
+			}))
 		}
-
-		eventListener.Register(telegramBot.Handle)
-		g.Go(wrapWithRecover(logger, func() error {
-			return telegramBot.Start(ctx)
-		}))
 	}
 
 	g.Go(wrapWithRecover(logger, func() error {

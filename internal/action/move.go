@@ -425,6 +425,7 @@ func MoveTo(toFunc func() (data.Position, bool), options ...step.MoveOption) err
 	ignoreShrines := !ctx.CharacterCfg.Game.InteractWithShrines
 	initialMovementArea := ctx.Data.PlayerUnit.Area
 	actionLastMonsterHandlingTime := time.Time{}
+	townReturnDetectedAt := time.Time{} // tracks when the bot first noticed it was unexpectedly in town
 	var targetPosition, previousTargetPosition, previousPosition data.Position
 	var shrine, chest data.Object
 	var pathOffsetX, pathOffsetY int
@@ -463,9 +464,27 @@ func MoveTo(toFunc func() (data.Position, bool), options ...step.MoveOption) err
 
 		//We're not trying to get to town, yet we are. Let bot do his stuff in town and wait to be back on the field
 		if !initialMovementArea.IsTown() && ctx.Data.AreaData.Area.IsTown() && !town.IsPositionInTown(targetPosition) {
+			if townReturnDetectedAt.IsZero() {
+				townReturnDetectedAt = time.Now()
+				ctx.Logger.Warn("Unexpectedly in town during field movement, waiting briefly for normal flow to resume")
+			}
+
+			// After 5 seconds of being stuck in town, proactively try to use the portal back
+			if time.Since(townReturnDetectedAt) > 5*time.Second {
+				ctx.Logger.Warn("Still in town after 5s, attempting to use portal to return to field")
+				if err := UsePortalInTown(); err != nil {
+					ctx.Logger.Error("Failed to use portal to return to field", slog.String("error", err.Error()))
+					return fmt.Errorf("unexpectedly in town and cannot return to field: %w", err)
+				}
+				townReturnDetectedAt = time.Time{} // reset after successful portal use
+				continue
+			}
+
 			utils.Sleep(100)
 			continue
 		}
+		// Back on the field, reset the town-return tracker
+		townReturnDetectedAt = time.Time{}
 
 		isSafe := true
 		if !ctx.Data.AreaData.Area.IsTown() {

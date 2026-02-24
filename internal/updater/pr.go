@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	upstreamOwner = "kwader2k"
-	upstreamRepo  = "koolo"
+	upstreamOwner = "Diobyte"
+	upstreamRepo  = "Koolo-DiobyteVersion"
 )
 
 var githubHTTPClient = &http.Client{Timeout: 15 * time.Second}

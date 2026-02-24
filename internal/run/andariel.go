@@ -113,6 +113,17 @@ var simpleAndarielAttackPos1 = data.Position{
 	Y: 9570,
 }
 
+// andarielSearchPositions are additional points deeper in the room to move to
+// if Andariel is not visible from the initial attack position. The bot walks
+// through these sequentially until she is found or all are exhausted.
+var andarielSearchPositions = []data.Position{
+	{X: 22548, Y: 9560},
+	{X: 22560, Y: 9550},
+	{X: 22548, Y: 9540},
+	{X: 22535, Y: 9550},
+	{X: 22548, Y: 9530},
+}
+
 type Andariel struct {
 	ctx *context.Status
 }
@@ -255,6 +266,12 @@ func (a Andariel) Run(parameters *RunParameters) error {
 		}
 	}
 
+	// Search for Andariel before engaging. If she hasn't aggro'd and moved
+	// toward the player she may be standing at the far end of the room where
+	// the character cannot detect her. Walk through additional search points
+	// deeper in the room until she is found.
+	a.searchForAndariel()
+
 	a.ctx.Logger.Info("Killing Andariel")
 	err = a.ctx.Char.KillAndariel()
 
@@ -268,6 +285,30 @@ func (a Andariel) Run(parameters *RunParameters) error {
 	}
 
 	return err
+}
+
+// searchForAndariel checks whether Andariel is visible from the current
+// position. If she is not, the bot moves through a series of deeper search
+// positions in the room until she enters the detection range. This prevents
+// the character from standing idle when Andariel has not aggro'd.
+func (a Andariel) searchForAndariel() {
+	_, found := a.ctx.Data.Monsters.FindOne(npc.Andariel, data.MonsterTypeUnique)
+	if found {
+		return
+	}
+
+	a.ctx.Logger.Info("Andariel not visible from attack position, searching deeper in the room")
+	for i, pos := range andarielSearchPositions {
+		action.MoveToCoords(pos)
+		utils.Sleep(300)
+
+		_, found = a.ctx.Data.Monsters.FindOne(npc.Andariel, data.MonsterTypeUnique)
+		if found {
+			a.ctx.Logger.Info("Andariel found at search position", "index", i+1)
+			return
+		}
+	}
+	a.ctx.Logger.Warn("Andariel not found after exhausting all search positions, proceeding to KillAndariel anyway")
 }
 
 // Consume antidotes from the inventory only, optionally feeding the mercenary.

@@ -298,7 +298,7 @@ func shouldStashIt(i data.Item, firstRun bool) (bool, bool, string, string) {
 		return false, false, "", ""
 	}
 
-	if _, isLevelingChar := ctx.Char.(context.LevelingCharacter); isLevelingChar && i.IsFromQuest() && i.Name != "HoradricCube" || i.Name == "HoradricStaff" {
+	if _, isLevelingChar := ctx.Char.(context.LevelingCharacter); isLevelingChar && i.IsFromQuest() && i.Name != "HoradricCube" {
 		return false, false, "", ""
 	}
 
