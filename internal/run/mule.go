@@ -100,18 +100,34 @@ func (m Mule) Run(parameters *RunParameters) error {
 		for {
 			movedItemInLoop := false
 
+			// Determine how many shared stash pages exist
+			sharedPages := ctx.Data.Inventory.SharedStashPages
+			if sharedPages == 0 {
+				sharedPages = 3
+			}
+
 			// Phase 1: Move items from all shared tabs to inventory
-			for sharedTab := 2; sharedTab <= 4; sharedTab++ {
+			for sharedTab := 2; sharedTab <= 1+sharedPages; sharedTab++ {
 				action.SwitchStashTab(sharedTab)
 				utils.Sleep(MuleActionDelay)
 
 				ctx.RefreshGameData()
-				itemsToMove := ctx.Data.Inventory.ByLocation(item.LocationSharedStash)
-				if len(itemsToMove) > 0 {
-					ctx.Logger.Info("Found items in shared stash", "tab", sharedTab, "count", len(itemsToMove))
+				allSharedItems := ctx.Data.Inventory.ByLocation(item.LocationSharedStash)
+
+				// Filter to only items on the currently displayed page.
+				// Page is 0-indexed in item data: page 0 = tab 2, page 1 = tab 3, etc.
+				itemsOnPage := make([]data.Item, 0)
+				for _, it := range allSharedItems {
+					if it.Location.Page+1 == sharedTab {
+						itemsOnPage = append(itemsOnPage, it)
+					}
 				}
 
-				for _, itemToMove := range itemsToMove {
+				if len(itemsOnPage) > 0 {
+					ctx.Logger.Info("Found items in shared stash", "tab", sharedTab, "count", len(itemsOnPage))
+				}
+
+				for _, itemToMove := range itemsOnPage {
 					if _, found := findInventorySpace(ctx, itemToMove); !found {
 						ctx.Logger.Info("Inventory is full, cannot pick up more items.")
 						break
