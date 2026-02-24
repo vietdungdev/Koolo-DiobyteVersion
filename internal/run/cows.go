@@ -57,15 +57,8 @@ func (a Cows) Run(parameters *RunParameters) error {
 			}
 		}
 
-		// Find and interact with stash
-		bank, found := a.ctx.Data.Objects.FindOne(object.Bank)
-		if !found {
-			return errors.New("stash not found")
-		}
-		err := action.InteractObject(bank, func() bool {
-			return a.ctx.Data.OpenMenus.Stash
-		})
-		if err != nil {
+		// Open stash so the cube transmute can access items
+		if err := action.OpenStash(); err != nil {
 			return err
 		}
 

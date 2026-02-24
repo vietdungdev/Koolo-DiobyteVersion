@@ -255,11 +255,7 @@ func ensureCubeIsOpen() error {
 
 		// Ensure stash is open
 		if !ctx.Data.OpenMenus.Stash {
-			bank, _ := ctx.Data.Objects.FindOne(object.Bank)
-			err := InteractObject(bank, func() bool {
-				return ctx.Data.OpenMenus.Stash
-			})
-			if err != nil {
+			if err := OpenStash(); err != nil {
 				return err
 			}
 		}

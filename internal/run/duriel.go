@@ -564,17 +564,13 @@ func (d Duriel) prepareStaff() error {
 
 		if horadricStaff.Location.LocationType == item.LocationStash {
 
-			bank, found := d.ctx.Data.Objects.FindOne(object.Bank)
-			if !found {
-				d.ctx.Logger.Info("bank object not found")
-			}
-
-			err := action.InteractObject(bank, func() bool {
-				return d.ctx.Data.OpenMenus.Stash
-			})
-			if err != nil {
+			if err := action.OpenStash(); err != nil {
 				return err
 			}
+
+			// Staff is in personal stash (tab 1); ensure we're on the right tab
+			// since D2R remembers the last-viewed tab across stash opens.
+			action.SwitchStashTab(1)
 
 			screenPos := ui.GetScreenCoordsForItem(horadricStaff)
 			d.ctx.HID.ClickWithModifier(game.LeftButton, screenPos.X, screenPos.Y, game.CtrlKey)

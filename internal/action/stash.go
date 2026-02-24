@@ -61,6 +61,14 @@ func Stash(forceStash bool) error {
 			return ctx.Data.OpenMenus.Stash
 		},
 	)
+
+	// Track stash tab state: the first open each game lands on personal tab;
+	// subsequent opens remember the last tab/page.
+	if !ctx.CurrentGame.HasOpenedStash {
+		ctx.CurrentGame.CurrentStashTab = 1
+		ctx.CurrentGame.HasOpenedStash = true
+	}
+
 	// Clear messages like TZ change or public game spam. Prevent bot from clicking on messages
 	ClearMessages()
 	stashGold()

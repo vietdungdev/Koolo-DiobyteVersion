@@ -505,17 +505,13 @@ func (a Leveling) prepareStaff() error {
 		if horadricStaff.Location.LocationType == item.LocationStash {
 			a.ctx.Logger.Info("It's in the stash, let's pick it up")
 
-			bank, found := a.ctx.Data.Objects.FindOne(object.Bank)
-			if !found {
-				a.ctx.Logger.Info("bank object not found")
-			}
-
-			err := action.InteractObject(bank, func() bool {
-				return a.ctx.Data.OpenMenus.Stash
-			})
-			if err != nil {
+			if err := action.OpenStash(); err != nil {
 				return err
 			}
+
+			// Staff is in personal stash (tab 1); ensure we're on the right tab
+			// since D2R remembers the last-viewed tab across stash opens.
+			action.SwitchStashTab(1)
 
 			screenPos := ui.GetScreenCoordsForItem(horadricStaff)
 			a.ctx.HID.ClickWithModifier(game.LeftButton, screenPos.X, screenPos.Y, game.CtrlKey)
