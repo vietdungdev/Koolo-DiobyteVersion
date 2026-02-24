@@ -487,6 +487,25 @@ wrong page. This group of changes tracks the stash UI state correctly.
   between tomb clears — matching the pattern used by other multi-segment runs in the
   codebase.
 
+### 27. Vendor visit for TP restock bypasses gold gate (`internal/action/vendor.go`) — [#10](https://github.com/Diobyte/Koolo-DiobyteVersion/pull/10)
+
+- **Root cause**: `shouldVisitVendor()` checked `TotalPlayerGold() < 1000` **before**
+  evaluating whether the character needed TP scrolls. When the player had low gold (< 1000)
+  but a depleted TP tome (< 5 charges), the function returned `false` early — the character
+  never visited the vendor and was stranded in the field without a way back to town.
+- **Fix**: the `ShouldBuyTPs()` check is moved **above** the 1000-gold gate so TP restocking
+  is always prioritised. In D2R the game pulls gold from shared stash tabs during vendor
+  purchases, but `TotalPlayerGold()` only sums personal gold + personal stash (excluding
+  shared stash), so any gold-based guard on the TP path would incorrectly skip the vendor
+  when shared stash gold is available.
+- **Downstream safety**: `BuyConsumables()` already has its own gold guards — TP Tome
+  purchase requires > 450 g, and every individual buy call goes through
+  `buyItemOrAbortOnNoGold()` which detects unchanged gold and aborts gracefully. Worst case
+  with truly zero gold everywhere is a single no-op vendor visit per town cycle, which is
+  far better than being stranded.
+- `ShouldBuyTPs()` was also removed from the combined `ShouldBuyPotions() || ShouldBuyIDs()`
+  condition that follows the gold gate, since it is now unreachable there (dead code removal).
+
 ---
 
 > For a file-level diff against upstream run:
