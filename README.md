@@ -269,14 +269,19 @@ below. This spans `supervisor.go`, `single_supervisor.go`, `character_switch.go`
   to the `Files` slice (discordgo v0.29.0). Both `sendItemScreenshot` and `sendScreenshot` are
   updated. This prevents future breakage when the deprecated field is removed.
 
-### 15. Andariel search fix (`internal/run/andariel.go`)
+### 15. Andariel search fix (`internal/run/andariel.go`, `internal/character/paladin_leveling.go`)
 
-- **Centralized `searchForAndariel()` method**: added 5 progressively deeper search positions in
-  Andariel's chamber (Y coordinates 9560 → 9530). Before killing, the run now calls
-  `searchForAndariel()` which moves through each position and checks for the boss via
-  `data.Monsters.FindOne()`. This fixes the reported issue where the bot would stand at the chamber
-  entrance unable to find Andariel because she was deeper in the room. The fix benefits **all 20+
-  character classes** since it lives in the run layer, not per-character.
+- **Centralized `searchForAndariel()` method**: added 6 progressively deeper search positions in
+  Andariel's chamber (Y coordinates 9560 → 9520), with the final position approaching Andariel's
+  throne directly. Before killing, the run now calls `searchForAndariel()` which moves through each
+  position and checks for the boss via `data.Monsters.FindOne()`. This fixes the reported issue
+  where the bot would stand at the chamber entrance unable to find Andariel because she was deeper
+  in the room. The fix benefits **all 20+ character classes** since it lives in the run layer, not
+  per-character.
+- **Paladin leveling directed search**: `KillAndariel()` in `paladin_leveling.go` now uses
+  `action.MoveToCoords` targeting Andariel's known throne coordinates `(22548, 9520)` instead of
+  `RandomMovement()` when the boss is not found. Random movement could move the character
+  further away from the spawn; directed movement converges on her location.
 
 ### 16. Bot idle state / stuck-in-town fix (`internal/action/move.go`)
 
@@ -285,6 +290,16 @@ below. This spans `supervisor.go`, `single_supervisor.go`, `character_switch.go`
   After 5 seconds stuck in town, the bot proactively calls `UsePortalInTown()` to return to the
   field. Previously, the `MoveTo` loop would spin indefinitely with `Sleep(100)` calls, appearing
   as if the bot was standing still doing nothing.
+- **`!pathFound` branch missing `continue`**: when the player was in town and
+  `UsePortalInTown()` succeeded in the `!pathFound` branch, execution fell through into path
+  step computation with a nil `path`, causing `path[pathStep]` to index out of range. The panic
+  was silently swallowed by the goroutine recovery handler, killing the run goroutine while
+  health/refresh goroutines kept ticking — producing the observed "idle" state. A `continue` is
+  now added after the successful portal call so the loop restarts and recalculates the path
+  from the post-portal position.
+- **Defensive `pathStep >= 0` guard**: before indexing into `path` in the non-town movement
+  code path, a bounds guard now prevents out-of-range access if `path` is empty, mirroring
+  the existing guard already present in the town branch.
 
 ### 17. Attack repositioning improvement (`internal/action/step/attack.go`)
 
@@ -329,6 +344,76 @@ Three unbounded loops that could cause the bot to stand still indefinitely have 
   object never appeared (laggy server, area restriction, game state desync), the loop would retry
   every 1 second indefinitely. Fixed with `maxPortalAttempts = 10`; after exhausting attempts,
   returns an error that propagates up for proper game restart.
+
+### 21. Blizzard Sorceress threat assessment & positioning rewrite (`internal/character/blizzard_sorceress.go`)
+
+- **Weighted threat scoring system**: the old per-monster `needsRepositioning()` binary check is
+  replaced with `assessThreat()` which iterates all nearby enemies once and computes a weighted
+  composite score factoring in:
+  - Proximity (inverse distance from danger zone)
+  - Elite multiplier (×3.0 for elite mobs)
+  - Dangerous aura detection (Fanaticism, Might, Conviction, Holy Fire/Shock/Freeze — ×2.5)
+  - Aggregate monster count threshold (≥3 nearby enemies triggers regardless of individual scores)
+- **Threat-level thresholds**: Low (3.0), Medium (8.0), High (15.0) drive graduated responses
+  instead of the previous single-distance binary trigger.
+- **Dynamic reposition cooldown**: `getRepositionCooldown()` interpolates between 200 ms and
+  1200 ms based on HP percentage (60% weight) and normalized threat score (40% weight).
+  Lower HP or higher threat → shorter cooldown → more frequent repositioning. Replaces the
+  fixed 1-second cooldown.
+- **Centroid-based escape vector**: `findSafePosition()` now computes the threat centroid
+  (weighted center of all nearby enemies) and escapes **away from the pack** rather than away
+  from a single arbitrary monster, preventing teleports into flanking groups.
+- **Two-phase directional search**: safe position candidates are first searched in a
+  180° cone centered on the escape vector (10° increments), falling back to a full 360°
+  circle only if no walkable positions exist in the cone.
+- **Enhanced scoring formula**: candidate positions are now scored with additional factors:
+  centroid distance (+2.5 weight), nearby monster count penalty (−3.0 per mob), nearby
+  elite/aura threat score penalty (−1.5), and a wall-blocked line-of-sight bonus (+1.0 per
+  blocked dangerous monster) that favours positions where terrain shields from elites.
+- **Cooldown-phase repositioning**: during Blizzard cooldown (when previously the bot
+  would always primary-attack), the bot now repositions if the threat assessment warrants
+  it, using the same safe-position logic. Falls back to primary attack only when the area
+  is safe.
+- **`stutterStepStaticField()` helper**: Static Field usage on bosses (Izual, Diablo, Baal)
+  is extracted into a shared helper that alternates between close-range Static Field casts
+  and teleport-retreats to safe Blizzard distance. Includes HP-gated abort (< 50% HP),
+  boss-alive checks, and Hell difficulty threshold detection (stops Static at ~35% boss HP
+  since it cannot reduce below ~33%).
+- **Nil-safety on boss lookups**: `KillIzual`, `KillBaal`, and `KillDiablo` now check the
+  `found` return from `FindOne` before using the monster.
+- **Removed dead code**: unused `needsRepositioning()`, stale commented-out `KillMephisto`
+  block, and orphaned `minMonsterDistance()` helper are removed.
+
+### 22. Clear area/room abort on area change & unreachable mob skip (`internal/action/clear_area.go`, `internal/action/clear_level.go`)
+
+- **Area-change detection**: both `ClearThroughPath()` and `clearRoom()` now record the starting
+  area at entry and check `ctx.Data.PlayerUnit.Area` each iteration. If the player has been
+  unexpectedly moved to a different area (death, chicken, waypoint), the function aborts
+  immediately with a descriptive error instead of spinning against stale map data.
+- **Skip unreachable monsters**: `clearRoom()` tracks a `skippedMonsters` set. When the
+  pathfinder cannot find a path to a target monster, the monster's `UnitID` is blacklisted
+  for the remainder of that room clearing pass, preventing infinite retry loops on monsters
+  stuck behind walls or in unreachable geometry.
+
+### 23. Shared stash support for Horadric Cube & quest items (`internal/action/horadric_cube.go`, `internal/action/cube_recipes.go`, `internal/run/cube.go`, `internal/run/quests.go`)
+
+When `StashToShared` is enabled, the Horadric Cube can legitimately end up in a shared stash tab.
+Previously, multiple code paths only searched personal stash and inventory for the cube, causing
+false "cube not found" errors and unnecessary re-fetch attempts.
+
+- **`ensureCubeIsOpen()`**: `Find("HoradricCube", ...)` now includes `item.LocationSharedStash`.
+  The existing `SwitchStashTab(cube.Location.Page + 1)` formula already handles both personal
+  (Page 0 → Tab 1) and shared pages (Page N → Tab N+1) correctly.
+- **`CubeAddItems()`**: the old `requiresPersonalStash` if/else guard is replaced with a
+  location-based `switch` that navigates to whatever tab the item currently occupies, handling
+  personal stash, shared stash, and DLC tabs uniformly.
+- **`cube_recipes.go`**: material search locations extended to include `LocationSharedStash`.
+- **`run/cube.go` and `run/quests.go`**: Horadric Cube presence checks now search shared stash,
+  preventing the bot from re-running the cube quest when it already has one stashed.
+
+> Note: In D2R, the Horadric Cube can be placed in the shared stash. Other quest components
+> (Staff of Kings, Amulet of the Viper, etc.) are server-side blocked from shared stash tabs,
+> so the non-cube quest item path is defensive but does not affect gameplay.
 
 ---
 
