@@ -30,6 +30,12 @@ func CubeAddItems(items ...data.Item) error {
 			return err
 		}
 	}
+	// The first stash open each game lands on personal; subsequent opens
+	// remember the last tab/page.
+	if !ctx.CurrentGame.HasOpenedStash {
+		ctx.CurrentGame.CurrentStashTab = 1
+		ctx.CurrentGame.HasOpenedStash = true
+	}
 	// Clear messages like TZ change or public game spam.  Prevent bot from clicking on messages
 	ClearMessages()
 	ctx.Logger.Info("Adding items to the Horadric Cube", slog.Any("items", items))
