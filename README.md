@@ -34,7 +34,7 @@ The upstream project builds with **Go 1.23**. This fork requires newer toolchain
 
 ## What's different from upstream
 
-**86 Go files changed — +2,032 / -671 lines** across the categories below.
+**100 Go files changed — +2,720 / -738 lines** across the categories below.
 
 ### 1. SigmaDrift mouse movement (`internal/game/sigmadrift.go`, `mouse.go`, `memory_injector.go`)
 
@@ -414,6 +414,78 @@ false "cube not found" errors and unnecessary re-fetch attempts.
 > Note: In D2R, the Horadric Cube can be placed in the shared stash. Other quest components
 > (Staff of Kings, Amulet of the Viper, etc.) are server-side blocked from shared stash tabs,
 > so the non-cube quest item path is defensive but does not affect gameplay.
+
+### 24. Warlock leveling character (`internal/character/warlock_leveling.go`, `internal/bot/character_create.go`, `internal/character/character.go`, `internal/server/templates/character_settings.gohtml`)
+
+Full leveling build for the **Warlock** class (D2R expansion class), selectable as
+`warlock_leveling` in the dashboard and configuration.
+
+- **Two-phase skill progression**: pre-respec (levels 1–44) focuses on the Fire tree
+  (MiasmaBolt → RingOfFire → FlameWave → Apocalypse); at level 45 the character respecs
+  into a Magic/Miasma build (MiasmaBolt → MiasmaChains → EnhancedEntropy → Abyss).
+- **Intelligent cooldown management**: when the primary skill is on cooldown, the bot
+  falls back to MiasmaBolt / MiasmaChains / primary attack in priority order, avoiding
+  idle standing during cooldown windows.
+- **Danger-aware repositioning**: at level 12+ the bot checks for enemies within
+  `warlockDangerDistance` (4 units) and teleports to a safe position between
+  `warlockSafeDistance` and `warlockMaxDistance` (6–15 units), with a 4-second cooldown
+  between repositions.
+- **Corpse consumption (Consume)**: post-respec the bot opportunistically casts Consume
+  on nearby corpses (within 10 units + line of sight) for mana recovery, with a 1-second
+  cooldown to avoid spam.
+- **Demon summoning**: `PreCTABuffSkills()` summons Goatman, Tainted, and Defiler pets
+  when they are not already alive, keeping the army refreshed between fights.
+- **Stat & skill point plans**: complete `StatPoints()` and `SkillPoints()` sequences
+  covering levels 2–85+, including the respec pivot at level 45.
+- **Boss kill sequences**: dedicated `killBoss()` with per-boss timeouts (220 s standard,
+  240 s for Baal) and persistent `killMonsterByName()` for super-uniques. All 12 standard
+  boss methods implemented (Countess, Andariel, Summoner, Duriel, Council, Mephisto,
+  Izual, Diablo, Pindle, Ancients, Nihlathak, Baal).
+- **Character creation**: `classCoords` map extended with Warlock screen coordinates.
+- **Dashboard**: `character_settings.gohtml` adds the "Warlock (Leveling)" option to the
+  class dropdown.
+
+### 25. Stash tab/page memory & shared-stash fixes (`internal/action/stash.go`, `internal/action/horadric_cube.go`, `internal/action/town.go`, `internal/context/context.go`, `internal/run/`)
+
+D2R remembers the last-viewed stash tab and shared page within a game session. The upstream
+code assumed every stash open lands on the personal tab, causing items to be placed on the
+wrong page. This group of changes tracks the stash UI state correctly.
+
+- **`HasOpenedStash` flag** (`context.go`): new `CurrentGameHelper.HasOpenedStash` bool.
+  The first stash open each game sets `CurrentStashTab = 1` (personal); subsequent opens
+  preserve the last known tab.
+- **`OpenStash()` / `CloseStash()`**: `OpenStash` sets the initial tab only on first use;
+  `CloseStash` no longer resets `CurrentStashTab` to 0, since the game remembers the tab.
+- **Shared page force-reset**: `switchStashTabHD` and `switchStashTabLegacy` no longer
+  assume the Shared button lands on page 1. They now click the "prev page" arrow
+  `sharedPages − 1` times to force-reset to page 1, then navigate forward to the target
+  page. Supports both 3-page (non-DLC) and 5-page (DLC) shared stashes.
+- **`StashFull()` optimization**: instead of opening the stash UI and clicking through
+  every shared tab (which corrupted `CurrentStashTab`), shared stash items are now read
+  directly from memory via `ctx.Data.Inventory.ByLocation(item.LocationSharedStash)`.
+  This is faster, non-destructive, and works even when the stash is closed.
+- **`OpenStash` consolidation**: `cows.go`, `duriel.go`, `leveling_act2.go`, and
+  `horadric_cube.go` all replaced inline `FindOne(object.Bank)` + `InteractObject` with
+  the centralized `action.OpenStash()` helper, gaining the tab-tracking behaviour
+  automatically. `duriel.go` and `leveling_act2.go` additionally call
+  `SwitchStashTab(1)` after opening, since the Horadric Staff is always in personal stash.
+- **`uber_helper.go`**: `openStash()` now sets `HasOpenedStash` consistently.
+- **Mule page filtering**: `mule.go` now reads `SharedStashPages` dynamically (supporting
+  DLC) and filters `ByLocation(item.LocationSharedStash)` items by their `Location.Page`
+  to only move items from the currently displayed page, preventing cross-page item
+  confusion.
+
+### 26. Tal Rasha Tombs TP exhaustion fix (`internal/run/tal_rasha_tombs.go`) — [#9](https://github.com/Diobyte/Koolo-DiobyteVersion/issues/9)
+
+- **Root cause**: `TalRashaTombs.Run()` loops through all 7 tombs. After clearing each
+  tomb it called bare `action.ReturnTown()`, which opens a TP and goes to town but
+  **never refills consumables**. After several clears the TP tome ran out of charges and
+  the next `ReturnTown()` failed with `"no tp item, can't open portal"`.
+- **Fix**: replaced `action.ReturnTown()` with `action.InRunReturnTownRoutine()`, which
+  performs the full between-run town routine (corpse recovery, belt management, identify,
+  vendor refill including TP scrolls and potions, stash, gamble, cube recipes, etc.)
+  between tomb clears — matching the pattern used by other multi-segment runs in the
+  codebase.
 
 ---
 
