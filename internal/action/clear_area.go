@@ -2,6 +2,7 @@ package action
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -116,9 +117,19 @@ func ClearAreaAroundPosition(pos data.Position, radius int, filters ...data.Mons
 func ClearThroughPath(pos data.Position, radius int, filter data.MonsterFilter) error {
 	ctx := context.Get()
 
+	startArea := ctx.Data.PlayerUnit.Area
 	lastMovement := false
 	for {
 		ctx.PauseIfNotPriority()
+		ctx.RefreshGameData()
+
+		// Detect area transition (e.g. chicken/death sent us to town) and abort
+		if ctx.Data.PlayerUnit.Area != startArea {
+			ctx.Logger.Warn("Area changed during ClearThroughPath, aborting",
+				slog.String("startArea", startArea.Area().Name),
+				slog.String("currentArea", ctx.Data.PlayerUnit.Area.Area().Name))
+			return fmt.Errorf("area changed during ClearThroughPath from %s to %s", startArea.Area().Name, ctx.Data.PlayerUnit.Area.Area().Name)
+		}
 
 		ClearAreaAroundPosition(ctx.Data.PlayerUnit.Position, radius, filter)
 

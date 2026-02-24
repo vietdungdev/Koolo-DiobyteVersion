@@ -131,10 +131,23 @@ func clearRoom(room data.Room, filter data.MonsterFilter) error {
 		return fmt.Errorf("failed moving to room center: %w", err)
 	}
 
+	startArea := ctx.Data.PlayerUnit.Area
+	skippedMonsters := map[data.UnitID]bool{}
+
 	for {
 		ctx.PauseIfNotPriority()
+		ctx.RefreshGameData()
+
 		if err := checkPlayerDeath(ctx); err != nil {
 			return err
+		}
+
+		// Detect area transition (e.g. chicken/death sent us to town) and abort room clearing
+		if ctx.Data.PlayerUnit.Area != startArea {
+			ctx.Logger.Warn("Area changed during room clearing, aborting",
+				slog.String("startArea", startArea.Area().Name),
+				slog.String("currentArea", ctx.Data.PlayerUnit.Area.Area().Name))
+			return fmt.Errorf("area changed during room clear from %s to %s", startArea.Area().Name, ctx.Data.PlayerUnit.Area.Area().Name)
 		}
 
 		monsters := getMonstersInRoom(room, filter)
@@ -147,6 +160,9 @@ func clearRoom(room data.Room, filter data.MonsterFilter) error {
 		// Check if there are monsters that can summon new monsters, and kill them first
 		targetMonster := data.Monster{}
 		for _, m := range monsters {
+			if skippedMonsters[m.UnitID] {
+				continue
+			}
 			if !ctx.Char.ShouldIgnoreMonster(m) {
 				if m.IsMonsterRaiser() {
 					targetMonster = m
@@ -180,6 +196,12 @@ func clearRoom(room data.Room, filter data.MonsterFilter) error {
 
 				return 0, false
 			}, nil)
+		} else {
+			// Cannot path to this monster — skip it to avoid spinning on unreachable targets
+			skippedMonsters[targetMonster.UnitID] = true
+			ctx.Logger.Debug("Cannot path to monster in room, skipping",
+				slog.Int("monsterName", int(targetMonster.Name)),
+				slog.Int("monsterID", int(targetMonster.UnitID)))
 		}
 	}
 }
