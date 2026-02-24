@@ -253,6 +253,83 @@ below. This spans `supervisor.go`, `single_supervisor.go`, `character_switch.go`
 - **`keyboard.go`**: `KeySequence` inter-key delay changed from fixed `time.Sleep(200ms)` to
   `utils.Sleep(200)` for timing humanisation.
 
+### 13. Telegram & Discord startup resilience (`cmd/koolo/main.go`, `internal/remote/telegram/constructor.go`)
+
+- **Non-fatal bot initialization**: Discord and Telegram bot initialization errors are now logged as
+  warnings instead of crashing the application. The bot continues running without the messaging
+  service that failed. This fixes the reported issue where a TCP connection reset during Telegram
+  API startup would crash the entire application.
+- **Telegram retry with exponential backoff**: the Telegram constructor retries up to 3 times with
+  exponential backoff (2 s → 4 s → 8 s) before giving up, handling transient network errors
+  (TCP resets, DNS failures, timeouts) gracefully.
+
+### 14. Discord API migration (`internal/remote/discord/discord_event_handler.go`)
+
+- **`MessageSend.File` → `MessageSend.Files`**: migrated from the deprecated singular `File` field
+  to the `Files` slice (discordgo v0.29.0). Both `sendItemScreenshot` and `sendScreenshot` are
+  updated. This prevents future breakage when the deprecated field is removed.
+
+### 15. Andariel search fix (`internal/run/andariel.go`)
+
+- **Centralized `searchForAndariel()` method**: added 5 progressively deeper search positions in
+  Andariel's chamber (Y coordinates 9560 → 9530). Before killing, the run now calls
+  `searchForAndariel()` which moves through each position and checks for the boss via
+  `data.Monsters.FindOne()`. This fixes the reported issue where the bot would stand at the chamber
+  entrance unable to find Andariel because she was deeper in the room. The fix benefits **all 20+
+  character classes** since it lives in the run layer, not per-character.
+
+### 16. Bot idle state / stuck-in-town fix (`internal/action/move.go`)
+
+- **Town return detection with timeout**: when the bot is unexpectedly teleported to town during
+  field movement (e.g., accidental TP click during combat), a `townReturnDetectedAt` timer starts.
+  After 5 seconds stuck in town, the bot proactively calls `UsePortalInTown()` to return to the
+  field. Previously, the `MoveTo` loop would spin indefinitely with `Sleep(100)` calls, appearing
+  as if the bot was standing still doing nothing.
+
+### 17. Attack repositioning improvement (`internal/action/step/attack.go`)
+
+- **Increased reposition attempts**: `repositionAttempts` threshold raised from `>= 1` to `>= 3`,
+  giving the bot more chances to angle around obstacles before giving up on a monster. This prevents
+  premature target abandonment in tight corridors.
+
+### 18. Quest item stash fix (`internal/action/stash.go`)
+
+- **Operator precedence bug fix**: the `shouldStashIt()` function had an erroneous
+  `|| i.Name == "HoradricStaff"` that bypassed all stash-exclusion logic due to Go's operator
+  precedence. The condition was removed so quest items are now correctly evaluated against the
+  standard stash rules.
+
+### 19. Updater repository migration (`internal/updater/`, `internal/server/templates/config.gohtml`)
+
+- **All updater URLs point to this fork**: the updater now clones, fetches, and checks against
+  `Diobyte/Koolo-DiobyteVersion` instead of `kwader2k/koolo`:
+  - `repo.go`: clone URL updated
+  - `git.go`: `ensureUpstreamRemote()` — upstream URL, expected URL, and contains-check all updated
+  - `pr.go`: `upstreamOwner` → `"Diobyte"`, `upstreamRepo` → `"Koolo-DiobyteVersion"` (affects
+    GitHub API calls for PR listing, commit fetching, cherry-pick)
+- **GUI text updated**: all `kwader2k/koolo` references in the web UI (how-it-works panel,
+  version fallback message, update status text, PR "Open" links) now show
+  `Diobyte/Koolo-DiobyteVersion`.
+- **Go module paths unchanged**: `github.com/hectorgimenez/koolo` references in `GOGARBLE` and
+  `-ldflags` are Go import paths matching `go.mod` and are intentionally left as-is.
+
+### 20. Infinite loop / bot freeze fixes (`internal/action/step/`, `internal/context/`)
+
+Three unbounded loops that could cause the bot to stand still indefinitely have been fixed:
+
+- **`swapWeapon()` — `swap_weapon.go`**: the `for {}` loop had **no max attempts**. If
+  `SwapToCTA()` was called but no CTA existed (e.g., `UseSwapForBuffs` enabled without a CTA
+  equipped), the bot would spin forever pressing the weapon swap key every 500 ms. Fixed with
+  `maxSwapAttempts = 6`; after exhausting attempts, logs a warning and returns gracefully.
+- **`WaitForGameToLoad()` — `context.go`**: the `for LoadingScreen` loop had **no timeout**. If
+  the loading screen flag got stuck (frozen game client, network issue), the bot would block
+  forever. This is called from 6+ critical code paths. Fixed with a **30-second deadline**; after
+  timeout, logs a warning and proceeds.
+- **`OpenPortal()` — `open_portal.go`**: the `for {}` loop had **no max attempts**. If the portal
+  object never appeared (laggy server, area restriction, game state desync), the loop would retry
+  every 1 second indefinitely. Fixed with `maxPortalAttempts = 10`; after exhausting attempts,
+  returns an error that propagates up for proper game restart.
+
 ---
 
 > For a file-level diff against upstream run:
@@ -264,7 +341,8 @@ below. This spans `supervisor.go`, `single_supervisor.go`, `character_switch.go`
 
 - The game must still be set to **English**. 1280x720 windowed mode and LOD 1.13c are required as usual.
 - All other documentation (installation, usage, pickit rules, etc.) is unchanged from upstream — refer to
-  the [kwader2k/koolo](https://github.com/kwader2k/koolo) README for full details.
+  the [Diobyte/Koolo-DiobyteVersion](https://github.com/Diobyte/Koolo-DiobyteVersion) README or the
+  original [kwader2k/koolo](https://github.com/kwader2k/koolo) README for full details.
 
 ---
 
